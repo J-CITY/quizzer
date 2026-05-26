@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Auto-generated files
+*.g.dart
+lib/l10n/app_localizations*.dart
+
+android/build/

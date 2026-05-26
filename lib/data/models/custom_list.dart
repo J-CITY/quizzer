@@ -9,5 +9,9 @@ class CustomList {
 
   late String name;
 
+  String? googleSheetId;
+
+  bool syncOnStartup = false;
+
   final words = IsarLinks<Word>();
 }

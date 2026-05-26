@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:quizzer/l10n/app_localizations.dart';
 import 'data/services/database_service.dart';
+import 'data/services/notification_service.dart';
+import 'data/services/google_sheets_service.dart';
 import 'ui/home_screen.dart';
 
 void main() async {
@@ -8,6 +12,22 @@ void main() async {
   
   final dbService = DatabaseService();
   await dbService.init();
+
+  await NotificationService.init();
+  final settings = await dbService.getSettings();
+  if (settings.notificationsEnabled) {
+    await NotificationService.updateSchedule(settings.notificationIntervalMinutes);
+  }
+
+  // Background sync for lists
+  final lists = await dbService.getCustomLists();
+  for (final list in lists) {
+    if (list.syncOnStartup && list.googleSheetId != null && list.googleSheetId!.isNotEmpty) {
+      GoogleSheetsService.fetchWords(list.googleSheetId!).then((words) {
+        dbService.syncWordsForList(list, words);
+      }).catchError((_) { /* ignore network errors silently */ });
+    }
+  }
 
   runApp(
     ProviderScope(
@@ -42,6 +62,16 @@ class QuizzerApp extends StatelessWidget {
         useMaterial3: true,
       ),
       themeMode: ThemeMode.system,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('ru', ''),
+        Locale('en', ''),
+      ],
       home: const HomeScreen(),
     );
   }

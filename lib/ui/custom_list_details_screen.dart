@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:quizzer/data/models/word.dart';
+import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/custom_list.dart';
 import '../data/services/database_service.dart';
-import 'training_screen.dart'; // We will create this next
+import '../data/services/google_sheets_service.dart';
+import 'training_screen.dart';
 
 class CustomListDetailsScreen extends ConsumerStatefulWidget {
   final CustomList customList;
@@ -10,28 +13,279 @@ class CustomListDetailsScreen extends ConsumerStatefulWidget {
   const CustomListDetailsScreen({super.key, required this.customList});
 
   @override
-  ConsumerState<CustomListDetailsScreen> createState() => _CustomListDetailsScreenState();
+  ConsumerState<CustomListDetailsScreen> createState() =>
+      _CustomListDetailsScreenState();
 }
 
-class _CustomListDetailsScreenState extends ConsumerState<CustomListDetailsScreen> {
+enum _ListMode { normal, selectToAdd, selectToDelete }
+
+class _CustomListDetailsScreenState
+    extends ConsumerState<CustomListDetailsScreen> {
+  _ListMode _mode = _ListMode.normal;
+  final Set<int> _selectedWordIds = {};
+  bool _isSyncing = false;
+
   @override
   void initState() {
     super.initState();
-    // Load links on start
     widget.customList.words.loadSync();
+  }
+
+  Future<void> _sync() async {
+    if (widget.customList.googleSheetId == null ||
+        widget.customList.googleSheetId!.isEmpty)
+      return;
+
+    setState(() => _isSyncing = true);
+    try {
+      final words = await GoogleSheetsService.fetchWords(
+        widget.customList.googleSheetId!,
+      );
+      final db = ref.read(databaseServiceProvider);
+      await db.syncWordsForList(widget.customList, words);
+      widget.customList.words.loadSync();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.errorNetwork)),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncing = false);
+      }
+    }
+  }
+
+  Future<void> _deleteList() async {
+    final db = ref.read(databaseServiceProvider);
+    await db.deleteCustomList(widget.customList.id);
+    if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _deleteSelectedWords() async {
+    final db = ref.read(databaseServiceProvider);
+    final wordsToRemove = widget.customList.words
+        .where((w) => _selectedWordIds.contains(w.id))
+        .toList();
+
+    await db.isar.writeTxn(() async {
+      widget.customList.words.removeAll(wordsToRemove);
+      await widget.customList.words.save();
+    });
+
+    setState(() {
+      _mode = _ListMode.normal;
+      _selectedWordIds.clear();
+    });
+  }
+
+  Future<void> _addSelectedToAnotherList() async {
+    final db = ref.read(databaseServiceProvider);
+    final allLists = await db.getCustomLists();
+    final localLists = allLists
+        .where(
+          (l) =>
+              l.id != widget.customList.id &&
+              (l.googleSheetId == null || l.googleSheetId!.isEmpty),
+        )
+        .toList();
+
+    if (localLists.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Нет доступных локальных списков')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    final selectedList = await showDialog<CustomList>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(AppLocalizations.of(context)!.addToAnotherList),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: localLists.length,
+              itemBuilder: (context, i) {
+                final l = localLists[i];
+                return ListTile(
+                  title: Text(l.name),
+                  onTap: () => Navigator.pop(context, l),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selectedList != null) {
+      final wordsToAdd = widget.customList.words
+          .where((w) => _selectedWordIds.contains(w.id))
+          .toList();
+      await db.isar.writeTxn(() async {
+        selectedList.words.addAll(wordsToAdd);
+        await selectedList.words.save();
+      });
+
+      setState(() {
+        _mode = _ListMode.normal;
+        _selectedWordIds.clear();
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Слова добавлены')));
+      }
+    }
+  }
+
+  void _showWordDetails(Word word) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      word.japanese,
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.volume_up,
+                      size: 32,
+                      color: Colors.deepPurple,
+                    ),
+                    onPressed: () {
+                      ref.read(ttsProvider).speak(word.japanese);
+                    },
+                  ),
+                ],
+              ),
+              if (word.reading != null && word.reading!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  AppLocalizations.of(context)!.wordReading(word.reading!),
+                  style: const TextStyle(fontSize: 18, color: Colors.grey),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Text(
+                AppLocalizations.of(context)!.wordTranslation(word.translation),
+                style: const TextStyle(fontSize: 20),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                AppLocalizations.of(
+                  context,
+                )!.wordProgress(word.progress.toString()),
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                AppLocalizations.of(context)!.wordLastTrained(
+                  word.lastTrained != null
+                      ? '${word.lastTrained!.day.toString().padLeft(2, '0')}.${word.lastTrained!.month.toString().padLeft(2, '0')}.${word.lastTrained!.year}'
+                      : AppLocalizations.of(context)!.never,
+                ),
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(AppLocalizations.of(context)!.close),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // We get words from the IsarLinks object
     final words = widget.customList.words.toList();
+    final isGoogleSheetList =
+        widget.customList.googleSheetId != null &&
+        widget.customList.googleSheetId!.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.customList.name),
+        actions: [
+          if (_mode == _ListMode.normal && isGoogleSheetList)
+            _isSyncing
+                ? const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(icon: const Icon(Icons.sync), onPressed: _sync),
+          if (_mode == _ListMode.normal)
+            PopupMenuButton<String>(
+              onSelected: (val) {
+                if (val == 'delete') {
+                  _deleteList();
+                } else if (val == 'edit') {
+                  setState(() => _mode = _ListMode.selectToDelete);
+                } else if (val == 'add_to_other') {
+                  setState(() => _mode = _ListMode.selectToAdd);
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text(AppLocalizations.of(context)!.deleteList),
+                ),
+                if (!isGoogleSheetList)
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Text(AppLocalizations.of(context)!.editList),
+                  ),
+                PopupMenuItem(
+                  value: 'add_to_other',
+                  child: Text(AppLocalizations.of(context)!.addToAnotherList),
+                ),
+              ],
+            ),
+          if (_mode != _ListMode.normal)
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => setState(() {
+                _mode = _ListMode.normal;
+                _selectedWordIds.clear();
+              }),
+            ),
+        ],
       ),
       body: words.isEmpty
-          ? const Center(child: Text('В этом списке пока нет слов'))
+          ? Center(child: Text(AppLocalizations.of(context)!.listEmpty))
           : ListView.builder(
               itemCount: words.length,
               itemBuilder: (context, index) {
@@ -39,9 +293,28 @@ class _CustomListDetailsScreenState extends ConsumerState<CustomListDetailsScree
                 final isLearned = word.progress >= 5;
 
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  color: isLearned ? Colors.green.shade50 : null,
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  color: _selectedWordIds.contains(word.id)
+                      ? Colors.deepPurple.shade50
+                      : (isLearned ? Colors.green.shade50 : null),
                   child: ListTile(
+                    leading: _mode != _ListMode.normal
+                        ? Checkbox(
+                            value: _selectedWordIds.contains(word.id),
+                            onChanged: (val) {
+                              setState(() {
+                                if (val == true) {
+                                  _selectedWordIds.add(word.id);
+                                } else {
+                                  _selectedWordIds.remove(word.id);
+                                }
+                              });
+                            },
+                          )
+                        : null,
                     title: Text(
                       word.japanese,
                       style: TextStyle(
@@ -51,45 +324,97 @@ class _CustomListDetailsScreenState extends ConsumerState<CustomListDetailsScree
                       ),
                     ),
                     subtitle: Text(word.translation),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            value: word.progress / 5,
-                            backgroundColor: Colors.grey.shade200,
-                            color: isLearned ? Colors.green : Colors.blue,
-                            strokeWidth: 3,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Checkbox(
-                          value: isLearned,
-                          activeColor: Colors.green,
-                          onChanged: (val) async {
-                            if (val != null) {
-                              await ref.read(databaseServiceProvider).toggleWordLearned(word, val);
-                              setState(() {}); // refresh UI
-                            }
-                          },
-                        ),
-                      ],
-                    ),
+                    trailing: _mode == _ListMode.normal
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  value: word.progress / 5,
+                                  backgroundColor: Colors.grey.shade200,
+                                  color: isLearned ? Colors.green : Colors.blue,
+                                  strokeWidth: 3,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Checkbox(
+                                value: isLearned,
+                                activeColor: Colors.green,
+                                onChanged: (val) async {
+                                  if (val != null) {
+                                    await ref
+                                        .read(databaseServiceProvider)
+                                        .toggleWordLearned(word, val);
+                                    setState(() {});
+                                  }
+                                },
+                              ),
+                            ],
+                          )
+                        : null,
+                    onTap: _mode != _ListMode.normal
+                        ? () {
+                            setState(() {
+                              if (_selectedWordIds.contains(word.id)) {
+                                _selectedWordIds.remove(word.id);
+                              } else {
+                                _selectedWordIds.add(word.id);
+                              }
+                            });
+                          }
+                        : () => _showWordDetails(word),
                   ),
                 );
               },
             ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Navigate to Training Screen for this specific list
-          Navigator.push(context, MaterialPageRoute(builder: (_) => TrainingScreen(customListId: widget.customList.id)));
-        },
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
-        child: const Icon(Icons.play_arrow, size: 32),
-      ),
+      floatingActionButton: _mode == _ListMode.normal
+          ? FloatingActionButton(
+              onPressed: () {
+                if (words.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          TrainingScreen(customListId: widget.customList.id),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        AppLocalizations.of(context)!.noWordsForTraining,
+                      ),
+                    ),
+                  );
+                }
+              },
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+              child: const Icon(Icons.play_arrow, size: 32),
+            )
+          : FloatingActionButton.extended(
+              onPressed: _selectedWordIds.isEmpty
+                  ? null
+                  : () {
+                      if (_mode == _ListMode.selectToDelete) {
+                        _deleteSelectedWords();
+                      } else {
+                        _addSelectedToAnotherList();
+                      }
+                    },
+              label: Text(
+                _mode == _ListMode.selectToDelete ? 'Удалить' : 'Добавить',
+              ),
+              icon: Icon(
+                _mode == _ListMode.selectToDelete ? Icons.delete : Icons.add,
+              ),
+              backgroundColor: _selectedWordIds.isEmpty
+                  ? Colors.grey
+                  : Colors.deepPurple,
+              foregroundColor: Colors.white,
+            ),
     );
   }
 }

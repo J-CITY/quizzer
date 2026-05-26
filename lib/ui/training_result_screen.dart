@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quizzer/l10n/app_localizations.dart';
 import '../data/models/word.dart';
 
 class TrainingResultScreen extends StatelessWidget {
@@ -10,7 +11,7 @@ class TrainingResultScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Результаты тренировки'),
+        title: Text(AppLocalizations.of(context)!.trainingResultsTitle),
         automaticallyImplyLeading: false, // Hide back button
       ),
       body: Column(
@@ -18,8 +19,8 @@ class TrainingResultScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
-              mistakes.isEmpty ? 'Отлично! Ни одной ошибки! 🎉' : 'Слова, где были ошибки (${mistakes.length}):',
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              mistakes.isEmpty ? AppLocalizations.of(context)!.trainingResultsPerfect : AppLocalizations.of(context)!.trainingResultsMistakes(mistakes.length.toString()),
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
           ),
@@ -32,7 +33,7 @@ class TrainingResultScreen extends StatelessWidget {
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     child: ListTile(
-                      title: Text(word.japanese, style: const TextStyle(fontSize: 18, color: Colors.red)),
+                      title: Text(word.japanese, style: TextStyle(fontSize: 18, color: Colors.red)),
                       subtitle: Text('${word.reading != null ? "${word.reading}\n" : ""}${word.translation}'),
                       isThreeLine: word.reading != null,
                     ),
@@ -54,7 +55,7 @@ class TrainingResultScreen extends StatelessWidget {
                   // Navigate back to the home screen
                   Navigator.of(context).popUntil((route) => route.isFirst);
                 },
-                child: const Text('Закрыть', style: TextStyle(fontSize: 18)),
+                child: Text(AppLocalizations.of(context)!.close, style: TextStyle(fontSize: 18)),
               ),
             ),
           ),

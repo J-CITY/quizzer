@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:quizzer/l10n/app_localizations.dart';
 import 'settings_screen.dart';
-import 'words_tab.dart';
 import 'custom_lists_tab.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -8,17 +8,9 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Quizzer'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Все слова'),
-              Tab(text: 'Списки'),
-            ],
-          ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Quizzer'),
           actions: [
             PopupMenuButton<String>(
               onSelected: (value) {
@@ -30,21 +22,15 @@ class HomeScreen extends StatelessWidget {
                 }
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'settings',
-                  child: Text('Настройки'),
+                  child: Text(AppLocalizations.of(context)!.settingsTitle),
                 ),
               ],
             )
           ],
         ),
-        body: const TabBarView(
-          children: [
-            WordsTab(),
-            CustomListsTab(),
-          ],
-        ),
-      ),
-    );
+        body: const CustomListsTab(),
+      );
   }
 }

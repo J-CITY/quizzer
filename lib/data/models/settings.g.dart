@@ -22,25 +22,55 @@ const SettingsSchema = CollectionSchema(
       name: r'autoPlayVoice',
       type: IsarType.bool,
     ),
-    r'notificationIntervalHours': PropertySchema(
+    r'isMigratedV2': PropertySchema(
       id: 1,
-      name: r'notificationIntervalHours',
+      name: r'isMigratedV2',
+      type: IsarType.bool,
+    ),
+    r'notificationIntervalMinutes': PropertySchema(
+      id: 2,
+      name: r'notificationIntervalMinutes',
       type: IsarType.long,
     ),
+    r'notificationTimeEnd': PropertySchema(
+      id: 3,
+      name: r'notificationTimeEnd',
+      type: IsarType.string,
+    ),
+    r'notificationTimeStart': PropertySchema(
+      id: 4,
+      name: r'notificationTimeStart',
+      type: IsarType.string,
+    ),
     r'notificationsEnabled': PropertySchema(
-      id: 2,
+      id: 5,
       name: r'notificationsEnabled',
       type: IsarType.bool,
     ),
+    r'playSoundEffects': PropertySchema(
+      id: 6,
+      name: r'playSoundEffects',
+      type: IsarType.bool,
+    ),
+    r'questionReading': PropertySchema(
+      id: 7,
+      name: r'questionReading',
+      type: IsarType.bool,
+    ),
+    r'questionTranslateToWord': PropertySchema(
+      id: 8,
+      name: r'questionTranslateToWord',
+      type: IsarType.bool,
+    ),
+    r'questionWordToTranslate': PropertySchema(
+      id: 9,
+      name: r'questionWordToTranslate',
+      type: IsarType.bool,
+    ),
     r'questionsCount': PropertySchema(
-      id: 3,
+      id: 10,
       name: r'questionsCount',
       type: IsarType.long,
-    ),
-    r'sheetId': PropertySchema(
-      id: 4,
-      name: r'sheetId',
-      type: IsarType.string,
     )
   },
   estimateSize: _settingsEstimateSize,
@@ -63,7 +93,8 @@ int _settingsEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
-  bytesCount += 3 + object.sheetId.length * 3;
+  bytesCount += 3 + object.notificationTimeEnd.length * 3;
+  bytesCount += 3 + object.notificationTimeStart.length * 3;
   return bytesCount;
 }
 
@@ -74,10 +105,16 @@ void _settingsSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeBool(offsets[0], object.autoPlayVoice);
-  writer.writeLong(offsets[1], object.notificationIntervalHours);
-  writer.writeBool(offsets[2], object.notificationsEnabled);
-  writer.writeLong(offsets[3], object.questionsCount);
-  writer.writeString(offsets[4], object.sheetId);
+  writer.writeBool(offsets[1], object.isMigratedV2);
+  writer.writeLong(offsets[2], object.notificationIntervalMinutes);
+  writer.writeString(offsets[3], object.notificationTimeEnd);
+  writer.writeString(offsets[4], object.notificationTimeStart);
+  writer.writeBool(offsets[5], object.notificationsEnabled);
+  writer.writeBool(offsets[6], object.playSoundEffects);
+  writer.writeBool(offsets[7], object.questionReading);
+  writer.writeBool(offsets[8], object.questionTranslateToWord);
+  writer.writeBool(offsets[9], object.questionWordToTranslate);
+  writer.writeLong(offsets[10], object.questionsCount);
 }
 
 Settings _settingsDeserialize(
@@ -89,10 +126,16 @@ Settings _settingsDeserialize(
   final object = Settings();
   object.autoPlayVoice = reader.readBool(offsets[0]);
   object.id = id;
-  object.notificationIntervalHours = reader.readLong(offsets[1]);
-  object.notificationsEnabled = reader.readBool(offsets[2]);
-  object.questionsCount = reader.readLong(offsets[3]);
-  object.sheetId = reader.readString(offsets[4]);
+  object.isMigratedV2 = reader.readBool(offsets[1]);
+  object.notificationIntervalMinutes = reader.readLong(offsets[2]);
+  object.notificationTimeEnd = reader.readString(offsets[3]);
+  object.notificationTimeStart = reader.readString(offsets[4]);
+  object.notificationsEnabled = reader.readBool(offsets[5]);
+  object.playSoundEffects = reader.readBool(offsets[6]);
+  object.questionReading = reader.readBool(offsets[7]);
+  object.questionTranslateToWord = reader.readBool(offsets[8]);
+  object.questionWordToTranslate = reader.readBool(offsets[9]);
+  object.questionsCount = reader.readLong(offsets[10]);
   return object;
 }
 
@@ -106,13 +149,25 @@ P _settingsDeserializeProp<P>(
     case 0:
       return (reader.readBool(offset)) as P;
     case 1:
-      return (reader.readLong(offset)) as P;
-    case 2:
       return (reader.readBool(offset)) as P;
-    case 3:
+    case 2:
       return (reader.readLong(offset)) as P;
+    case 3:
+      return (reader.readString(offset)) as P;
     case 4:
       return (reader.readString(offset)) as P;
+    case 5:
+      return (reader.readBool(offset)) as P;
+    case 6:
+      return (reader.readBool(offset)) as P;
+    case 7:
+      return (reader.readBool(offset)) as P;
+    case 8:
+      return (reader.readBool(offset)) as P;
+    case 9:
+      return (reader.readBool(offset)) as P;
+    case 10:
+      return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -269,46 +324,56 @@ extension SettingsQueryFilter
     });
   }
 
-  QueryBuilder<Settings, Settings, QAfterFilterCondition>
-      notificationIntervalHoursEqualTo(int value) {
+  QueryBuilder<Settings, Settings, QAfterFilterCondition> isMigratedV2EqualTo(
+      bool value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'notificationIntervalHours',
+        property: r'isMigratedV2',
         value: value,
       ));
     });
   }
 
   QueryBuilder<Settings, Settings, QAfterFilterCondition>
-      notificationIntervalHoursGreaterThan(
+      notificationIntervalMinutesEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'notificationIntervalMinutes',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationIntervalMinutesGreaterThan(
     int value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
-        property: r'notificationIntervalHours',
+        property: r'notificationIntervalMinutes',
         value: value,
       ));
     });
   }
 
   QueryBuilder<Settings, Settings, QAfterFilterCondition>
-      notificationIntervalHoursLessThan(
+      notificationIntervalMinutesLessThan(
     int value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
-        property: r'notificationIntervalHours',
+        property: r'notificationIntervalMinutes',
         value: value,
       ));
     });
   }
 
   QueryBuilder<Settings, Settings, QAfterFilterCondition>
-      notificationIntervalHoursBetween(
+      notificationIntervalMinutesBetween(
     int lower,
     int upper, {
     bool includeLower = true,
@@ -316,7 +381,7 @@ extension SettingsQueryFilter
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
-        property: r'notificationIntervalHours',
+        property: r'notificationIntervalMinutes',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -326,10 +391,323 @@ extension SettingsQueryFilter
   }
 
   QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeEndEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'notificationTimeEnd',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeEndGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'notificationTimeEnd',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeEndLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'notificationTimeEnd',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeEndBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'notificationTimeEnd',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeEndStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'notificationTimeEnd',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeEndEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'notificationTimeEnd',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeEndContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'notificationTimeEnd',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeEndMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'notificationTimeEnd',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeEndIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'notificationTimeEnd',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeEndIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'notificationTimeEnd',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeStartEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'notificationTimeStart',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeStartGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'notificationTimeStart',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeStartLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'notificationTimeStart',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeStartBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'notificationTimeStart',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeStartStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'notificationTimeStart',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeStartEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'notificationTimeStart',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeStartContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'notificationTimeStart',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeStartMatches(String pattern,
+          {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'notificationTimeStart',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeStartIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'notificationTimeStart',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      notificationTimeStartIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'notificationTimeStart',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
       notificationsEnabledEqualTo(bool value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'notificationsEnabled',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      playSoundEffectsEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'playSoundEffects',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      questionReadingEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'questionReading',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      questionTranslateToWordEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'questionTranslateToWord',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterFilterCondition>
+      questionWordToTranslateEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'questionWordToTranslate',
         value: value,
       ));
     });
@@ -389,136 +767,6 @@ extension SettingsQueryFilter
       ));
     });
   }
-
-  QueryBuilder<Settings, Settings, QAfterFilterCondition> sheetIdEqualTo(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'sheetId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterFilterCondition> sheetIdGreaterThan(
-    String value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'sheetId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterFilterCondition> sheetIdLessThan(
-    String value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'sheetId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterFilterCondition> sheetIdBetween(
-    String lower,
-    String upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'sheetId',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterFilterCondition> sheetIdStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'sheetId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterFilterCondition> sheetIdEndsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'sheetId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterFilterCondition> sheetIdContains(
-      String value,
-      {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'sheetId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterFilterCondition> sheetIdMatches(
-      String pattern,
-      {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'sheetId',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterFilterCondition> sheetIdIsEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'sheetId',
-        value: '',
-      ));
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterFilterCondition> sheetIdIsNotEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'sheetId',
-        value: '',
-      ));
-    });
-  }
 }
 
 extension SettingsQueryObject
@@ -540,17 +788,55 @@ extension SettingsQuerySortBy on QueryBuilder<Settings, Settings, QSortBy> {
     });
   }
 
-  QueryBuilder<Settings, Settings, QAfterSortBy>
-      sortByNotificationIntervalHours() {
+  QueryBuilder<Settings, Settings, QAfterSortBy> sortByIsMigratedV2() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'notificationIntervalHours', Sort.asc);
+      return query.addSortBy(r'isMigratedV2', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy> sortByIsMigratedV2Desc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isMigratedV2', Sort.desc);
     });
   }
 
   QueryBuilder<Settings, Settings, QAfterSortBy>
-      sortByNotificationIntervalHoursDesc() {
+      sortByNotificationIntervalMinutes() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'notificationIntervalHours', Sort.desc);
+      return query.addSortBy(r'notificationIntervalMinutes', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      sortByNotificationIntervalMinutesDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationIntervalMinutes', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy> sortByNotificationTimeEnd() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationTimeEnd', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      sortByNotificationTimeEndDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationTimeEnd', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy> sortByNotificationTimeStart() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationTimeStart', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      sortByNotificationTimeStartDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationTimeStart', Sort.desc);
     });
   }
 
@@ -567,6 +853,58 @@ extension SettingsQuerySortBy on QueryBuilder<Settings, Settings, QSortBy> {
     });
   }
 
+  QueryBuilder<Settings, Settings, QAfterSortBy> sortByPlaySoundEffects() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'playSoundEffects', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy> sortByPlaySoundEffectsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'playSoundEffects', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy> sortByQuestionReading() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'questionReading', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy> sortByQuestionReadingDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'questionReading', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      sortByQuestionTranslateToWord() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'questionTranslateToWord', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      sortByQuestionTranslateToWordDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'questionTranslateToWord', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      sortByQuestionWordToTranslate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'questionWordToTranslate', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      sortByQuestionWordToTranslateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'questionWordToTranslate', Sort.desc);
+    });
+  }
+
   QueryBuilder<Settings, Settings, QAfterSortBy> sortByQuestionsCount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'questionsCount', Sort.asc);
@@ -576,18 +914,6 @@ extension SettingsQuerySortBy on QueryBuilder<Settings, Settings, QSortBy> {
   QueryBuilder<Settings, Settings, QAfterSortBy> sortByQuestionsCountDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'questionsCount', Sort.desc);
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterSortBy> sortBySheetId() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'sheetId', Sort.asc);
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterSortBy> sortBySheetIdDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'sheetId', Sort.desc);
     });
   }
 }
@@ -618,17 +944,55 @@ extension SettingsQuerySortThenBy
     });
   }
 
-  QueryBuilder<Settings, Settings, QAfterSortBy>
-      thenByNotificationIntervalHours() {
+  QueryBuilder<Settings, Settings, QAfterSortBy> thenByIsMigratedV2() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'notificationIntervalHours', Sort.asc);
+      return query.addSortBy(r'isMigratedV2', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy> thenByIsMigratedV2Desc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isMigratedV2', Sort.desc);
     });
   }
 
   QueryBuilder<Settings, Settings, QAfterSortBy>
-      thenByNotificationIntervalHoursDesc() {
+      thenByNotificationIntervalMinutes() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'notificationIntervalHours', Sort.desc);
+      return query.addSortBy(r'notificationIntervalMinutes', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      thenByNotificationIntervalMinutesDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationIntervalMinutes', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy> thenByNotificationTimeEnd() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationTimeEnd', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      thenByNotificationTimeEndDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationTimeEnd', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy> thenByNotificationTimeStart() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationTimeStart', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      thenByNotificationTimeStartDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationTimeStart', Sort.desc);
     });
   }
 
@@ -645,6 +1009,58 @@ extension SettingsQuerySortThenBy
     });
   }
 
+  QueryBuilder<Settings, Settings, QAfterSortBy> thenByPlaySoundEffects() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'playSoundEffects', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy> thenByPlaySoundEffectsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'playSoundEffects', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy> thenByQuestionReading() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'questionReading', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy> thenByQuestionReadingDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'questionReading', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      thenByQuestionTranslateToWord() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'questionTranslateToWord', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      thenByQuestionTranslateToWordDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'questionTranslateToWord', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      thenByQuestionWordToTranslate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'questionWordToTranslate', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QAfterSortBy>
+      thenByQuestionWordToTranslateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'questionWordToTranslate', Sort.desc);
+    });
+  }
+
   QueryBuilder<Settings, Settings, QAfterSortBy> thenByQuestionsCount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'questionsCount', Sort.asc);
@@ -654,18 +1070,6 @@ extension SettingsQuerySortThenBy
   QueryBuilder<Settings, Settings, QAfterSortBy> thenByQuestionsCountDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'questionsCount', Sort.desc);
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterSortBy> thenBySheetId() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'sheetId', Sort.asc);
-    });
-  }
-
-  QueryBuilder<Settings, Settings, QAfterSortBy> thenBySheetIdDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'sheetId', Sort.desc);
     });
   }
 }
@@ -678,10 +1082,32 @@ extension SettingsQueryWhereDistinct
     });
   }
 
-  QueryBuilder<Settings, Settings, QDistinct>
-      distinctByNotificationIntervalHours() {
+  QueryBuilder<Settings, Settings, QDistinct> distinctByIsMigratedV2() {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'notificationIntervalHours');
+      return query.addDistinctBy(r'isMigratedV2');
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QDistinct>
+      distinctByNotificationIntervalMinutes() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'notificationIntervalMinutes');
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QDistinct> distinctByNotificationTimeEnd(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'notificationTimeEnd',
+          caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QDistinct> distinctByNotificationTimeStart(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'notificationTimeStart',
+          caseSensitive: caseSensitive);
     });
   }
 
@@ -691,16 +1117,35 @@ extension SettingsQueryWhereDistinct
     });
   }
 
-  QueryBuilder<Settings, Settings, QDistinct> distinctByQuestionsCount() {
+  QueryBuilder<Settings, Settings, QDistinct> distinctByPlaySoundEffects() {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'questionsCount');
+      return query.addDistinctBy(r'playSoundEffects');
     });
   }
 
-  QueryBuilder<Settings, Settings, QDistinct> distinctBySheetId(
-      {bool caseSensitive = true}) {
+  QueryBuilder<Settings, Settings, QDistinct> distinctByQuestionReading() {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'sheetId', caseSensitive: caseSensitive);
+      return query.addDistinctBy(r'questionReading');
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QDistinct>
+      distinctByQuestionTranslateToWord() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'questionTranslateToWord');
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QDistinct>
+      distinctByQuestionWordToTranslate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'questionWordToTranslate');
+    });
+  }
+
+  QueryBuilder<Settings, Settings, QDistinct> distinctByQuestionsCount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'questionsCount');
     });
   }
 }
@@ -719,10 +1164,30 @@ extension SettingsQueryProperty
     });
   }
 
-  QueryBuilder<Settings, int, QQueryOperations>
-      notificationIntervalHoursProperty() {
+  QueryBuilder<Settings, bool, QQueryOperations> isMigratedV2Property() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'notificationIntervalHours');
+      return query.addPropertyName(r'isMigratedV2');
+    });
+  }
+
+  QueryBuilder<Settings, int, QQueryOperations>
+      notificationIntervalMinutesProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'notificationIntervalMinutes');
+    });
+  }
+
+  QueryBuilder<Settings, String, QQueryOperations>
+      notificationTimeEndProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'notificationTimeEnd');
+    });
+  }
+
+  QueryBuilder<Settings, String, QQueryOperations>
+      notificationTimeStartProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'notificationTimeStart');
     });
   }
 
@@ -733,15 +1198,35 @@ extension SettingsQueryProperty
     });
   }
 
-  QueryBuilder<Settings, int, QQueryOperations> questionsCountProperty() {
+  QueryBuilder<Settings, bool, QQueryOperations> playSoundEffectsProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'questionsCount');
+      return query.addPropertyName(r'playSoundEffects');
     });
   }
 
-  QueryBuilder<Settings, String, QQueryOperations> sheetIdProperty() {
+  QueryBuilder<Settings, bool, QQueryOperations> questionReadingProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'sheetId');
+      return query.addPropertyName(r'questionReading');
+    });
+  }
+
+  QueryBuilder<Settings, bool, QQueryOperations>
+      questionTranslateToWordProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'questionTranslateToWord');
+    });
+  }
+
+  QueryBuilder<Settings, bool, QQueryOperations>
+      questionWordToTranslateProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'questionWordToTranslate');
+    });
+  }
+
+  QueryBuilder<Settings, int, QQueryOperations> questionsCountProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'questionsCount');
     });
   }
 }

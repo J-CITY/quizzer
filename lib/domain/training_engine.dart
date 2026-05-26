@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/word.dart';
+import '../data/models/settings.dart';
 
 final trainingEngineProvider = Provider<TrainingEngine>((ref) {
   return TrainingEngine();
@@ -26,8 +27,10 @@ class TrainingEngine {
   final _random = Random();
 
   /// Generates a list of [count] questions from [sourceWords].
-  List<Question> generateSession(List<Word> sourceWords, int count) {
+  List<Question> generateSession(List<Word> sourceWords, Settings settings) {
     if (sourceWords.isEmpty) return [];
+
+    final count = settings.questionsCount;
 
     // Prioritize words that are not fully learned
     List<Word> candidates = sourceWords.where((w) => w.progress < 5).toList();
@@ -52,16 +55,20 @@ class TrainingEngine {
     // Shuffle selected words so they appear in random order
     selectedWords.shuffle(_random);
 
-    return selectedWords.map((w) => _generateQuestion(w, sourceWords)).toList();
+    return selectedWords.map((w) => _generateQuestion(w, sourceWords, settings)).toList();
   }
 
-  Question _generateQuestion(Word word, List<Word> allWords) {
-    // Determine available question types
-    List<int> availableTypes = [2, 3]; // 2: Jap->Trans, 3: Trans->Jap
+  Question _generateQuestion(Word word, List<Word> allWords, Settings settings) {
+    List<int> availableTypes = [];
     
-    // Only include reading variants if reading exists
-    if (word.reading != null && word.reading!.isNotEmpty) {
-      availableTypes.addAll([0, 1]); // 0: Jap->Read, 1: Read->Jap
+    if (settings.questionWordToTranslate) availableTypes.add(2); // Jap->Trans
+    if (settings.questionTranslateToWord) availableTypes.add(3); // Trans->Jap
+    if (settings.questionReading && word.reading != null && word.reading!.isNotEmpty) {
+      availableTypes.addAll([0, 1]); // Jap->Read, Read->Jap
+    }
+
+    if (availableTypes.isEmpty) {
+      availableTypes.add(2); // Fallback
     }
 
     final type = availableTypes[_random.nextInt(availableTypes.length)];

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../data/models/word.dart';
 import '../domain/training_engine.dart';
 import '../data/services/database_service.dart';
@@ -22,14 +25,21 @@ class TrainingScreen extends ConsumerStatefulWidget {
 }
 
 class _TrainingScreenState extends ConsumerState<TrainingScreen> {
+  final AudioPlayer _audioPlayer = AudioPlayer();
   List<Question> _questions = [];
   int _currentIndex = 0;
   final Set<int> _wrongWordIds = {};
   final Set<int> _correctFirstTryWordIds = {};
-  
+
   bool _isLoading = true;
   String? _selectedOption;
   bool _isAnswerRevealed = false;
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -57,11 +67,10 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
       return;
     }
 
-    _questions = engine.generateSession(sourceWords, settings.questionsCount);
+    _questions = engine.generateSession(sourceWords, settings);
 
     if (mounted) {
       setState(() => _isLoading = false);
-      _playVoiceIfNeeded();
     }
   }
 
@@ -86,9 +95,20 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
       _isAnswerRevealed = true;
     });
 
+    _playVoiceIfNeeded();
+
     final q = _questions[_currentIndex];
     final isCorrect = option == q.correctAnswer;
     final wordId = q.word.id;
+
+    final settings = await ref.read(databaseServiceProvider).getSettings();
+    if (settings.playSoundEffects) {
+      if (isCorrect) {
+        await _audioPlayer.play(AssetSource('sounds/true.mp3'));
+      } else {
+        await _audioPlayer.play(AssetSource('sounds/false.mp3'));
+      }
+    }
 
     if (isCorrect) {
       if (!_wrongWordIds.contains(wordId)) {
@@ -110,7 +130,6 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
         _selectedOption = null;
         _isAnswerRevealed = false;
       });
-      _playVoiceIfNeeded();
     } else {
       _finishTraining();
     }
@@ -118,7 +137,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
 
   Future<void> _finishTraining() async {
     final db = ref.read(databaseServiceProvider);
-    
+
     final allWords = await db.getAllWords();
     final wordsMap = {for (var w in allWords) w.id: w};
 
@@ -146,7 +165,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => TrainingResultScreen(mistakes: mistakesList)),
+        MaterialPageRoute(
+          builder: (_) => TrainingResultScreen(mistakes: mistakesList),
+        ),
       );
     }
   }
@@ -160,7 +181,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     if (_questions.isEmpty) {
       return Scaffold(
         appBar: AppBar(),
-        body: const Center(child: Text('Нет слов для тренировки')),
+        body: Center(
+          child: Text(AppLocalizations.of(context)!.noWordsForTraining),
+        ),
       );
     }
 
@@ -168,10 +191,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     final progressText = '${_currentIndex + 1} / ${_questions.length}';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(progressText),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: Text(progressText), centerTitle: true),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -183,24 +203,53 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                 elevation: 4,
                 child: Stack(
                   children: [
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(q.prompt, style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                          if (q.subtitle != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Text(q.subtitle!, style: const TextStyle(fontSize: 24, color: Colors.grey)),
+                    GestureDetector(
+                      onLongPress: () {
+                        Clipboard.setData(ClipboardData(text: q.prompt));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              AppLocalizations.of(context)!.copiedToClipboard,
                             ),
-                        ],
+                          ),
+                        );
+                      },
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              q.prompt,
+                              style: const TextStyle(
+                                fontSize: 48,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            if (q.subtitle != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  q.subtitle!,
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                     Positioned(
                       top: 8,
                       right: 8,
                       child: IconButton(
-                        icon: const Icon(Icons.volume_up, size: 32, color: Colors.deepPurple),
+                        icon: const Icon(
+                          Icons.volume_up,
+                          size: 32,
+                          color: Colors.deepPurple,
+                        ),
                         onPressed: _playVoice,
                       ),
                     ),
@@ -215,7 +264,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                 itemCount: q.options.length,
                 itemBuilder: (context, index) {
                   final option = q.options[index];
-                  
+
                   Color buttonColor = Colors.white;
                   Color textColor = Colors.black87;
 
@@ -236,10 +285,26 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                         backgroundColor: buttonColor,
                         foregroundColor: textColor,
                         padding: const EdgeInsets.all(20),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       onPressed: () => _onOptionSelected(option),
-                      child: Text(option, style: const TextStyle(fontSize: 18), textAlign: TextAlign.center),
+                      onLongPress: () {
+                        Clipboard.setData(ClipboardData(text: option));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              AppLocalizations.of(context)!.copiedToClipboard,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        option,
+                        style: const TextStyle(fontSize: 18),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   );
                 },

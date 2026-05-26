@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,10 +15,23 @@ class DatabaseService {
 
   Future<void> init() async {
     final dir = await getApplicationDocumentsDirectory();
-    isar = await Isar.open(
-      [WordSchema, CustomListSchema, SettingsSchema],
-      directory: dir.path,
-    );
+    try {
+      isar = await Isar.open(
+        [WordSchema, CustomListSchema, SettingsSchema],
+        directory: dir.path,
+      );
+    } catch (e) {
+      // Fallback for schema mismatch during development
+      final file = File('${dir.path}/default.isar');
+      final lockFile = File('${dir.path}/default.isar.lock');
+      if (file.existsSync()) file.deleteSync();
+      if (lockFile.existsSync()) lockFile.deleteSync();
+      
+      isar = await Isar.open(
+        [WordSchema, CustomListSchema, SettingsSchema],
+        directory: dir.path,
+      );
+    }
     
     await _initSettings();
     await _applySpacedRepetition();
@@ -33,7 +47,18 @@ class DatabaseService {
   }
 
   Future<Settings> getSettings() async {
-    return (await isar.settings.get(0))!;
+    final settings = (await isar.settings.get(0))!;
+    if (!settings.isMigratedV2) {
+      settings.questionWordToTranslate = true;
+      settings.questionTranslateToWord = true;
+      settings.questionReading = true;
+      settings.playSoundEffects = true;
+      settings.isMigratedV2 = true;
+      await isar.writeTxn(() async {
+        await isar.settings.put(settings);
+      });
+    }
+    return settings;
   }
 
   Future<void> saveSettings(Settings settings) async {
@@ -42,32 +67,32 @@ class DatabaseService {
     });
   }
 
-  Future<void> syncWords(List<Word> downloadedWords) async {
+  Future<void> syncWordsForList(CustomList list, List<Word> downloadedWords) async {
     await isar.writeTxn(() async {
       final localWords = await isar.words.where().findAll();
       final localWordsMap = {for (var w in localWords) w.sheetId: w};
-      
-      final downloadedIds = downloadedWords.map((w) => w.sheetId).toSet();
 
-      // Delete words that are no longer in the Google Sheet
-      final wordsToDelete = localWords
-          .where((w) => !downloadedIds.contains(w.sheetId))
-          .map((w) => w.id)
-          .toList();
-      await isar.words.deleteAll(wordsToDelete);
+      final updatedOrNewWords = <Word>[];
 
-      // Insert new or Update existing (preserving local progress)
       for (var dWord in downloadedWords) {
         if (localWordsMap.containsKey(dWord.sheetId)) {
           final lWord = localWordsMap[dWord.sheetId]!;
           lWord.japanese = dWord.japanese;
           lWord.reading = dWord.reading;
           lWord.translation = dWord.translation;
-          await isar.words.put(lWord);
+          updatedOrNewWords.add(lWord);
         } else {
-          await isar.words.put(dWord);
+          updatedOrNewWords.add(dWord);
         }
       }
+
+      await isar.words.putAll(updatedOrNewWords);
+
+      // Replace the custom list's words completely
+      list.words.clear();
+      list.words.addAll(updatedOrNewWords);
+      await isar.customLists.put(list);
+      await list.words.save();
     });
   }
 

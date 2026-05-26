@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 import '../data/models/custom_list.dart';
@@ -22,7 +23,7 @@ class CustomListsTab extends ConsumerWidget {
       body: listsAsync.when(
         data: (lists) {
           if (lists.isEmpty) {
-            return const Center(child: Text('У вас пока нет кастомных списков', style: TextStyle(fontSize: 16, color: Colors.grey)));
+            return Center(child: Text(AppLocalizations.of(context)!.noCustomLists, style: TextStyle(fontSize: 16, color: Colors.grey)));
           }
           return ListView.builder(
             itemCount: lists.length,
@@ -31,8 +32,8 @@ class CustomListsTab extends ConsumerWidget {
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: ListTile(
-                  title: Text(list.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  subtitle: Text('Слов: ${list.words.length}'),
+                  title: Text(list.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  subtitle: Text(AppLocalizations.of(context)!.wordsCount(list.words.length.toString())),
                   trailing: IconButton(
                     icon: const Icon(Icons.settings),
                     onPressed: () {
@@ -47,8 +48,8 @@ class CustomListsTab extends ConsumerWidget {
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Ошибка загрузки списков: $err')),
+        loading: () => Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text(AppLocalizations.of(context)!.errorLoadingLists(err.toString()))),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {

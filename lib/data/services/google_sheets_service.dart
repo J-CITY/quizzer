@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:csv/csv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,7 +44,7 @@ class GoogleSheetsService {
 
     if (response.statusCode == 200) {
       // Decode with UTF-8 to handle Japanese and Russian characters properly
-      final csvString = response.body;
+      final csvString = utf8.decode(response.bodyBytes);
       final List<List<dynamic>> rows = const CsvToListConverter().convert(
         csvString,
       );
@@ -88,6 +89,38 @@ class GoogleSheetsService {
     } else {
       throw Exception(
         'Failed to load words. Status code: ${response.statusCode}',
+      );
+    }
+  }
+  static Future<List<String>> fetchConfusableGroups(String sheetId) async {
+    final url = Uri.parse(
+      'https://docs.google.com/spreadsheets/d/$sheetId/export?format=csv',
+    );
+
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final csvString = utf8.decode(response.bodyBytes);
+      final List<List<dynamic>> rows = const CsvToListConverter().convert(
+        csvString,
+      );
+
+      List<String> groups = [];
+      for (int i = 0; i < rows.length; i++) {
+        final row = rows[i];
+        if (row.isEmpty) continue;
+        
+        final firstCol = row[0].toString().trim();
+        // Remove spaces inside the string if any, assuming characters are just listed
+        final group = firstCol.replaceAll(' ', '');
+        if (group.length > 1) {
+          groups.add(group);
+        }
+      }
+      return groups;
+    } else {
+      throw Exception(
+        'Failed to load confusable groups. Status code: ${response.statusCode}',
       );
     }
   }

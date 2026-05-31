@@ -3,6 +3,7 @@ import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/services/database_service.dart';
 import '../data/models/settings.dart' as app;
+import '../data/services/google_sheets_service.dart';
 import '../data/services/notification_service.dart';
 
 final settingsProvider = FutureProvider.autoDispose<app.Settings>((ref) async {
@@ -61,7 +62,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _ensureOneQuestionType(app.Settings settings) {
     if (!settings.questionWordToTranslate &&
         !settings.questionTranslateToWord &&
-        !settings.questionReading) {
+        !settings.questionWordToReading &&
+        !settings.questionReadingToWord) {
       settings.questionWordToTranslate = true;
     }
   }
@@ -226,6 +228,81 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   });
                 },
               ),
+              SwitchListTile(
+                title: Text(AppLocalizations.of(context)!.settingsAutoAdvance),
+                subtitle: Text(
+                  AppLocalizations.of(context)!.settingsAutoAdvanceDesc,
+                ),
+                value: settings.autoAdvanceToNextQuestion,
+                onChanged: (val) {
+                  _updateSettings(settings, () {
+                    settings.autoAdvanceToNextQuestion = val;
+                  });
+                },
+              ),
+              const Divider(),
+              SwitchListTile(
+                title: Text(AppLocalizations.of(context)!.settingsSimilarWords),
+                subtitle: Text(AppLocalizations.of(context)!.settingsSimilarWordsDesc),
+                value: settings.useSimilarWordsForOptions,
+                onChanged: (val) {
+                  _updateSettings(settings, () {
+                    settings.useSimilarWordsForOptions = val;
+                  });
+                },
+              ),
+              SwitchListTile(
+                title: Text(AppLocalizations.of(context)!.settingsSpoilWords),
+                subtitle: Text(AppLocalizations.of(context)!.settingsSpoilWordsDesc),
+                value: settings.useSpoiledWordsForOptions,
+                onChanged: (val) {
+                  _updateSettings(settings, () {
+                    settings.useSpoiledWordsForOptions = val;
+                  });
+                },
+              ),
+              ListTile(
+                title: TextFormField(
+                  initialValue: settings.confusableCharactersSheetId ?? '',
+                  decoration: InputDecoration(
+                    labelText: AppLocalizations.of(context)!.settingsConfusableSheet,
+                  ),
+                  onChanged: (val) {
+                    settings.confusableCharactersSheetId = val;
+                  },
+                  onFieldSubmitted: (val) {
+                    _updateSettings(settings, () {
+                      settings.confusableCharactersSheetId = val;
+                    });
+                  },
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.sync),
+                  tooltip: AppLocalizations.of(context)!.settingsSyncConfusable,
+                  onPressed: () async {
+                    if (settings.confusableCharactersSheetId == null || settings.confusableCharactersSheetId!.isEmpty) return;
+                    try {
+                      // Save it first just in case
+                      await _updateSettings(settings, () {});
+                      final groups = await GoogleSheetsService.fetchConfusableGroups(settings.confusableCharactersSheetId!);
+                      await _updateSettings(settings, () {
+                        settings.customConfusableGroups = groups;
+                      });
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(AppLocalizations.of(context)!.syncSuccess)),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e')),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ),
               const Divider(),
               ExpansionTile(
                 title: Text(AppLocalizations.of(context)!.questionTypes),
@@ -259,12 +336,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     },
                   ),
                   CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionReading),
-                    value: settings.questionReading,
+                    title: Text(AppLocalizations.of(context)!.questionWordToReading),
+                    value: settings.questionWordToReading,
                     onChanged: (val) {
                       if (val != null) {
                         _updateSettings(settings, () {
-                          settings.questionReading = val;
+                          settings.questionWordToReading = val;
+                          _ensureOneQuestionType(settings);
+                        });
+                      }
+                    },
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionReadingToWord),
+                    value: settings.questionReadingToWord,
+                    onChanged: (val) {
+                      if (val != null) {
+                        _updateSettings(settings, () {
+                          settings.questionReadingToWord = val;
                           _ensureOneQuestionType(settings);
                         });
                       }

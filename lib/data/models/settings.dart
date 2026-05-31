@@ -21,7 +21,17 @@ class Settings {
 
   bool questionWordToTranslate = true;
   bool questionTranslateToWord = true;
-  bool questionReading = true;
+  
+  bool questionWordToReading = true;
+  bool questionReadingToWord = true;
+
+  bool autoAdvanceToNextQuestion = true;
 
   bool isMigratedV2 = false;
+
+  bool useSimilarWordsForOptions = false;
+  bool useSpoiledWordsForOptions = false;
+
+  String? confusableCharactersSheetId;
+  List<String> customConfusableGroups = [];
 }

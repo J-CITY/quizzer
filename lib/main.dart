@@ -6,34 +6,41 @@ import 'data/services/database_service.dart';
 import 'data/services/notification_service.dart';
 import 'data/services/google_sheets_service.dart';
 import 'ui/home_screen.dart';
+import 'package:quizzer/utils/constants.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   final dbService = DatabaseService();
   await dbService.init();
 
   await NotificationService.init();
   final settings = await dbService.getSettings();
   if (settings.notificationsEnabled) {
-    await NotificationService.updateSchedule(settings.notificationIntervalMinutes);
+    await NotificationService.updateSchedule(
+      settings.notificationIntervalMinutes,
+    );
   }
 
   // Background sync for lists
   final lists = await dbService.getCustomLists();
   for (final list in lists) {
-    if (list.syncOnStartup && list.googleSheetId != null && list.googleSheetId!.isNotEmpty) {
-      GoogleSheetsService.fetchWords(list.googleSheetId!).then((words) {
-        dbService.syncWordsForList(list, words);
-      }).catchError((_) { /* ignore network errors silently */ });
+    if (list.syncOnStartup &&
+        list.googleSheetId != null &&
+        list.googleSheetId!.isNotEmpty) {
+      GoogleSheetsService.fetchWords(list.googleSheetId!)
+          .then((words) {
+            dbService.syncWordsForList(list, words);
+          })
+          .catchError((_) {
+            /* ignore network errors silently */
+          });
     }
   }
 
   runApp(
     ProviderScope(
-      overrides: [
-        databaseServiceProvider.overrideWithValue(dbService),
-      ],
+      overrides: [databaseServiceProvider.overrideWithValue(dbService)],
       child: const QuizzerApp(),
     ),
   );
@@ -49,16 +56,18 @@ class QuizzerApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
+          seedColor: ColorConstants.seedColorLight,
           brightness: Brightness.light,
         ),
+        fontFamilyFallback: const ['Yu Gothic', 'Meiryo', 'Noto Sans JP'],
         useMaterial3: true,
       ),
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
+          seedColor: ColorConstants.seedColorDark,
           brightness: Brightness.dark,
         ),
+        fontFamilyFallback: const ['Yu Gothic', 'Meiryo', 'Noto Sans JP'],
         useMaterial3: true,
       ),
       themeMode: ThemeMode.system,
@@ -68,10 +77,7 @@ class QuizzerApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('ru', ''),
-        Locale('en', ''),
-      ],
+      supportedLocales: const [Locale('ru', ''), Locale('en', '')],
       home: const HomeScreen(),
     );
   }

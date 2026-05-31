@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/word.dart';
 import '../models/custom_list.dart';
 import '../models/settings.dart';
+import '../models/training_session.dart';
 
 final databaseServiceProvider = Provider<DatabaseService>((ref) {
   throw UnimplementedError('DatabaseService should be overridden in main.dart');
@@ -17,7 +18,7 @@ class DatabaseService {
     final dir = await getApplicationDocumentsDirectory();
     try {
       isar = await Isar.open(
-        [WordSchema, CustomListSchema, SettingsSchema],
+        [WordSchema, CustomListSchema, SettingsSchema, TrainingSessionSchema],
         directory: dir.path,
       );
     } catch (e) {
@@ -28,7 +29,7 @@ class DatabaseService {
       if (lockFile.existsSync()) lockFile.deleteSync();
       
       isar = await Isar.open(
-        [WordSchema, CustomListSchema, SettingsSchema],
+        [WordSchema, CustomListSchema, SettingsSchema, TrainingSessionSchema],
         directory: dir.path,
       );
     }
@@ -51,7 +52,8 @@ class DatabaseService {
     if (!settings.isMigratedV2) {
       settings.questionWordToTranslate = true;
       settings.questionTranslateToWord = true;
-      settings.questionReading = true;
+      settings.questionWordToReading = true;
+      settings.questionReadingToWord = true;
       settings.playSoundEffects = true;
       settings.isMigratedV2 = true;
       await isar.writeTxn(() async {
@@ -69,12 +71,16 @@ class DatabaseService {
 
   Future<void> syncWordsForList(CustomList list, List<Word> downloadedWords) async {
     await isar.writeTxn(() async {
-      final localWords = await isar.words.where().findAll();
-      final localWordsMap = {for (var w in localWords) w.sheetId: w};
+      await list.words.load();
+      final localWordsInList = list.words.toList();
+      final localWordsMap = {for (var w in localWordsInList) w.sheetId: w};
 
       final updatedOrNewWords = <Word>[];
+      final downloadedIds = <int>{};
 
       for (var dWord in downloadedWords) {
+        downloadedIds.add(dWord.sheetId);
+        
         if (localWordsMap.containsKey(dWord.sheetId)) {
           final lWord = localWordsMap[dWord.sheetId]!;
           lWord.japanese = dWord.japanese;
@@ -87,6 +93,12 @@ class DatabaseService {
       }
 
       await isar.words.putAll(updatedOrNewWords);
+
+      // We should also delete words that were in the list but are no longer in the spreadsheet!
+      final wordsToDelete = localWordsInList.where((w) => !downloadedIds.contains(w.sheetId)).toList();
+      for (var w in wordsToDelete) {
+        await isar.words.delete(w.id);
+      }
 
       // Replace the custom list's words completely
       list.words.clear();
@@ -157,5 +169,24 @@ class DatabaseService {
     await isar.writeTxn(() async {
       await isar.customLists.delete(id);
     });
+  }
+
+  // --- Training Sessions Methods ---
+
+  Future<void> saveTrainingSession(int? customListId) async {
+    final now = DateTime.now();
+    // Normalize to midnight
+    final date = DateTime(now.year, now.month, now.day);
+    
+    await isar.writeTxn(() async {
+      final session = TrainingSession()
+        ..date = date
+        ..customListId = customListId;
+      await isar.trainingSessions.put(session);
+    });
+  }
+
+  Future<List<TrainingSession>> getAllTrainingSessions() async {
+    return await isar.trainingSessions.where().findAll();
   }
 }

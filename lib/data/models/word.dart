@@ -6,8 +6,8 @@ part 'word.g.dart';
 class Word {
   Id id = Isar.autoIncrement;
 
-  @Index(unique: true, replace: true)
-  late int sheetId; // Unique ID from the Google Sheet column
+  @Index()
+  late int sheetId; // ID from the Google Sheet column
 
   late String japanese;
 

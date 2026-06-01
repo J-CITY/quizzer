@@ -17,23 +17,27 @@ class DatabaseService {
   Future<void> init() async {
     final dir = await getApplicationDocumentsDirectory();
     try {
-      isar = await Isar.open(
-        [WordSchema, CustomListSchema, SettingsSchema, TrainingSessionSchema],
-        directory: dir.path,
-      );
+      isar = await Isar.open([
+        WordSchema,
+        CustomListSchema,
+        SettingsSchema,
+        TrainingSessionSchema,
+      ], directory: dir.path);
     } catch (e) {
       // Fallback for schema mismatch during development
       final file = File('${dir.path}/default.isar');
       final lockFile = File('${dir.path}/default.isar.lock');
       if (file.existsSync()) file.deleteSync();
       if (lockFile.existsSync()) lockFile.deleteSync();
-      
-      isar = await Isar.open(
-        [WordSchema, CustomListSchema, SettingsSchema, TrainingSessionSchema],
-        directory: dir.path,
-      );
+
+      isar = await Isar.open([
+        WordSchema,
+        CustomListSchema,
+        SettingsSchema,
+        TrainingSessionSchema,
+      ], directory: dir.path);
     }
-    
+
     await _initSettings();
     await _applySpacedRepetition();
   }
@@ -49,17 +53,20 @@ class DatabaseService {
 
   Future<Settings> getSettings() async {
     final settings = (await isar.settings.get(0))!;
-    if (!settings.isMigratedV2) {
-      settings.questionWordToTranslate = true;
-      settings.questionTranslateToWord = true;
-      settings.questionWordToReading = true;
-      settings.questionReadingToWord = true;
-      settings.playSoundEffects = true;
-      settings.isMigratedV2 = true;
+    bool needsSave = false;
+
+    // Check if learning queue size is invalid (negative or zero)
+    if (settings.learningQueueSize < 1) {
+      settings.learningQueueSize = 50; // default safe value;
+      needsSave = true;
+    }
+
+    if (needsSave) {
       await isar.writeTxn(() async {
         await isar.settings.put(settings);
       });
     }
+
     return settings;
   }
 
@@ -69,7 +76,10 @@ class DatabaseService {
     });
   }
 
-  Future<void> syncWordsForList(CustomList list, List<Word> downloadedWords) async {
+  Future<void> syncWordsForList(
+    CustomList list,
+    List<Word> downloadedWords,
+  ) async {
     await isar.writeTxn(() async {
       await list.words.load();
       final localWordsInList = list.words.toList();
@@ -80,7 +90,7 @@ class DatabaseService {
 
       for (var dWord in downloadedWords) {
         downloadedIds.add(dWord.sheetId);
-        
+
         if (localWordsMap.containsKey(dWord.sheetId)) {
           final lWord = localWordsMap[dWord.sheetId]!;
           lWord.japanese = dWord.japanese;
@@ -95,7 +105,9 @@ class DatabaseService {
       await isar.words.putAll(updatedOrNewWords);
 
       // We should also delete words that were in the list but are no longer in the spreadsheet!
-      final wordsToDelete = localWordsInList.where((w) => !downloadedIds.contains(w.sheetId)).toList();
+      final wordsToDelete = localWordsInList
+          .where((w) => !downloadedIds.contains(w.sheetId))
+          .toList();
       for (var w in wordsToDelete) {
         await isar.words.delete(w.id);
       }
@@ -112,7 +124,7 @@ class DatabaseService {
   Future<void> _applySpacedRepetition() async {
     final now = DateTime.now();
     final learnedWords = await isar.words.filter().progressEqualTo(5).findAll();
-    
+
     final wordsToUpdate = <Word>[];
     for (var word in learnedWords) {
       if (word.lastTrained != null) {
@@ -152,8 +164,47 @@ class DatabaseService {
     });
   }
 
+  Future<void> updateLearningQueue(CustomList list, int queueSize) async {
+    await isar.writeTxn(() async {
+      await list.learningQueue.load();
+      await list.words.load();
+
+      // Remove learned words from queue
+      final learnedInQueue = list.learningQueue
+          .where((w) => w.progress >= 5)
+          .toList();
+      if (learnedInQueue.isNotEmpty) {
+        list.learningQueue.removeAll(learnedInQueue);
+      }
+
+      final validQueue = list.learningQueue
+          .where((w) => w.progress < 5)
+          .toList();
+      int needed = queueSize - validQueue.length;
+
+      if (needed > 0) {
+        final queueIds = validQueue.map((w) => w.id).toSet();
+        final availableUnlearned = list.words
+            .where((w) => w.progress < 5 && !queueIds.contains(w.id))
+            .toList();
+
+        availableUnlearned.shuffle();
+        final newWords = availableUnlearned.take(needed).toList();
+        if (newWords.isNotEmpty) {
+          list.learningQueue.addAll(newWords);
+        }
+      } else if (needed < 0) {
+        // Shrink the queue if settings changed to a smaller size
+        final excess = validQueue.sublist(queueSize);
+        list.learningQueue.removeAll(excess);
+      }
+
+      await list.learningQueue.save();
+    });
+  }
+
   // --- Custom Lists Methods ---
-  
+
   Future<List<CustomList>> getCustomLists() async {
     return await isar.customLists.where().findAll();
   }
@@ -177,7 +228,7 @@ class DatabaseService {
     final now = DateTime.now();
     // Normalize to midnight
     final date = DateTime(now.year, now.month, now.day);
-    
+
     await isar.writeTxn(() async {
       final session = TrainingSession()
         ..date = date

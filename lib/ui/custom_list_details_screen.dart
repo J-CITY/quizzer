@@ -100,6 +100,7 @@ class _CustomListDetailsScreenState
         .where(
           (l) =>
               l.id != widget.customList.id &&
+              l.language == widget.customList.language &&
               (l.googleSheetId == null || l.googleSheetId!.isEmpty),
         )
         .toList();
@@ -198,8 +199,14 @@ class _CustomListDetailsScreenState
                   ),
                   IconButton(
                     icon: Icon(Icons.volume_up, size: 32, color: primaryColor),
-                    onPressed: () {
-                      ref.read(ttsProvider).speak(word.japanese);
+                    onPressed: () async {
+                      await ref.read(ttsProvider).setLanguage(widget.customList.language);
+                      
+                      final textToSpeak = (word.reading != null && word.reading!.isNotEmpty) 
+                          ? word.reading! 
+                          : word.japanese;
+                          
+                      await ref.read(ttsProvider).speak(textToSpeak);
                     },
                   ),
                 ],

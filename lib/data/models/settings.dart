@@ -7,6 +7,7 @@ class Settings {
   Id id = 0; // Singleton pattern (only one settings object)
 
   int questionsCount = 50;
+  int learningQueueSize = 50;
 
   bool notificationsEnabled = true;
 
@@ -21,13 +22,16 @@ class Settings {
 
   bool questionWordToTranslate = true;
   bool questionTranslateToWord = true;
-  
+
   bool questionWordToReading = true;
   bool questionReadingToWord = true;
 
-  bool autoAdvanceToNextQuestion = true;
+  bool questionVoiceToTranslate = false;
+  bool questionVoiceToWord = false;
+  bool questionTranslateToWordInput = false;
+  bool questionTranslateToWordConstructor = false;
 
-  bool isMigratedV2 = false;
+  bool autoAdvanceToNextQuestion = true;
 
   bool useSimilarWordsForOptions = false;
   bool useSpoiledWordsForOptions = false;

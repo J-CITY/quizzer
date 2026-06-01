@@ -11,7 +11,11 @@ class CustomList {
 
   String? googleSheetId;
 
+  String language = 'ja-JP';
+
   bool syncOnStartup = false;
 
   final words = IsarLinks<Word>();
+  
+  final learningQueue = IsarLinks<Word>();
 }

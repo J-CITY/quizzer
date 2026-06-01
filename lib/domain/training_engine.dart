@@ -71,6 +71,10 @@ class TrainingEngine {
     if (settings.questionReadingToWord && word.reading != null && word.reading!.isNotEmpty) {
       availableTypes.add(1); // Read->Jap
     }
+    if (settings.questionVoiceToTranslate) availableTypes.add(4); // Voice->Trans
+    if (settings.questionVoiceToWord) availableTypes.add(5); // Voice->Jap
+    if (settings.questionTranslateToWordInput) availableTypes.add(6); // Trans->Jap (Input)
+    if (settings.questionTranslateToWordConstructor) availableTypes.add(7); // Trans->Jap (Constructor)
 
     if (availableTypes.isEmpty) {
       availableTypes.add(2); // Fallback
@@ -82,6 +86,7 @@ class TrainingEngine {
     String? subtitle;
     String correctAnswer = '';
     List<String> wrongOptions = [];
+    List<String>? customOptions;
 
     // Helper to format Japanese + Reading for translation questions
     String getJapaneseDisplay(Word w) {
@@ -113,10 +118,45 @@ class TrainingEngine {
         correctAnswer = getJapaneseDisplay(word);
         wrongOptions = _getWrongOptions(allWords, word, getJapaneseDisplay, true, settings);
         break;
+      case 4: // Voice -> Translation
+        prompt = ''; // handled in UI
+        correctAnswer = word.translation;
+        wrongOptions = _getWrongOptions(allWords, word, (w) => w.translation, false, settings);
+        break;
+      case 5: // Voice -> Japanese
+        prompt = ''; // handled in UI
+        correctAnswer = getJapaneseDisplay(word);
+        wrongOptions = _getWrongOptions(allWords, word, getJapaneseDisplay, true, settings);
+        break;
+      case 6: // Translation -> Japanese (Input)
+        prompt = word.translation;
+        correctAnswer = word.japanese;
+        wrongOptions = [];
+        break;
+      case 7: // Translation -> Japanese (Constructor)
+        prompt = word.translation;
+        correctAnswer = word.japanese;
+        
+        final correctChars = word.japanese.split('');
+        final extraCharsCount = min(6, correctChars.length);
+        final extraChars = <String>[];
+        final allChars = allWords.map((w) => w.japanese).join('').split('');
+        allChars.shuffle(_random);
+        
+        for (final c in allChars) {
+          if (!correctChars.contains(c) && !extraChars.contains(c) && c.trim().isNotEmpty) {
+            extraChars.add(c);
+            if (extraChars.length >= extraCharsCount) break;
+          }
+        }
+        
+        customOptions = [...correctChars, ...extraChars]..shuffle(_random);
+        wrongOptions = [];
+        break;
     }
 
-    // Mix correct answer with wrong ones
-    final options = [...wrongOptions, correctAnswer]..shuffle(_random);
+    // Mix correct answer with wrong ones (if not already custom)
+    final options = customOptions ?? ([...wrongOptions, correctAnswer]..shuffle(_random));
 
     return Question(
       word: word,

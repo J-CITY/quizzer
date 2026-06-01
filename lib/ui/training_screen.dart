@@ -4,6 +4,7 @@ import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 import '../data/models/word.dart';
 import '../domain/training_engine.dart';
 import '../data/services/database_service.dart';
@@ -37,6 +38,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   final Set<int> _wrongWordIds = {};
   final Set<int> _correctFirstTryWordIds = {};
 
+  final TextEditingController _textController = TextEditingController();
+  final List<int> _selectedCharIndices = [];
+
   // Maps question index to the user's selected answer string.
   final Map<int, String> _userAnswers = {};
 
@@ -45,6 +49,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   @override
   void dispose() {
     _audioPlayer.dispose();
+    _textController.dispose();
     super.dispose();
   }
 
@@ -60,14 +65,33 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     final engine = ref.read(trainingEngineProvider);
 
     List<Word> sourceWords;
+    String listLanguage = 'ja-JP';
+
     if (widget.customListId != null) {
       final lists = await db.getCustomLists();
       final list = lists.firstWhere((l) => l.id == widget.customListId);
-      list.words.loadSync();
-      sourceWords = list.words.toList();
+      listLanguage = list.language;
+
+      if (!widget.isReviewMode) {
+        await db.updateLearningQueue(list, settings.learningQueueSize);
+        await list.learningQueue.load();
+        sourceWords = list.learningQueue.toList();
+
+        // If queue is completely empty (meaning no unlearned words left at all),
+        // fallback to all words just in case, though usually handled by UI.
+        if (sourceWords.isEmpty) {
+          list.words.loadSync();
+          sourceWords = list.words.toList();
+        }
+      } else {
+        list.words.loadSync();
+        sourceWords = list.words.toList();
+      }
     } else {
       sourceWords = await db.getAllWords();
     }
+
+    await ref.read(ttsProvider).setLanguage(listLanguage);
 
     if (sourceWords.isEmpty) {
       if (mounted) Navigator.pop(context);
@@ -82,6 +106,22 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
 
     if (mounted) {
       setState(() => _isLoading = false);
+      _playVoiceOnAppearIfNeeded();
+    }
+  }
+
+  Future<void> _playVoiceOnAppearIfNeeded() async {
+    if (_questions.isEmpty || _currentIndex >= _questions.length) return;
+    final q = _questions[_currentIndex];
+
+    final settings = await ref.read(databaseServiceProvider).getSettings();
+    if (settings.autoPlayVoice) {
+      // Do not play if the prompt is translation (types 3, 6, 7)
+      if (q.type == 3 || q.type == 6 || q.type == 7) {
+        return;
+      }
+
+      _playVoice();
     }
   }
 
@@ -99,7 +139,12 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   Future<void> _playVoice() async {
     if (_questions.isEmpty || _currentIndex >= _questions.length) return;
     final q = _questions[_currentIndex];
-    await ref.read(ttsProvider).speak(q.word.japanese);
+
+    final textToSpeak = (q.word.reading != null && q.word.reading!.isNotEmpty)
+        ? q.word.reading!
+        : q.word.japanese;
+
+    await ref.read(ttsProvider).speak(textToSpeak);
   }
 
   void _onOptionSelected(String option) async {
@@ -144,20 +189,26 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   }
 
   void _goForward() {
+    _textController.clear();
+    _selectedCharIndices.clear();
     if (_currentIndex < _questions.length - 1) {
       setState(() {
         _currentIndex++;
       });
+      _playVoiceOnAppearIfNeeded();
     } else {
       _finishTraining();
     }
   }
 
   void _goBack() {
+    _textController.clear();
+    _selectedCharIndices.clear();
     if (_currentIndex > 0) {
       setState(() {
         _currentIndex--;
       });
+      _playVoiceOnAppearIfNeeded();
     }
   }
 
@@ -227,9 +278,28 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     final progressText = '${_currentIndex + 1} / ${_questions.length}';
     final hasAnswered = _userAnswers.containsKey(_currentIndex);
     final selectedOption = _userAnswers[_currentIndex];
-    final showTranslation = hasAnswered && (q.type == 0 || q.type == 1);
+
+    bool showTranslation = false;
+    String mainText = q.prompt;
+    String? subText = q.subtitle;
+
+    if (hasAnswered) {
+      if (q.type != 2) {
+        showTranslation = true;
+      }
+
+      if (q.type == 3 ||
+          q.type == 4 ||
+          q.type == 5 ||
+          q.type == 6 ||
+          q.type == 7) {
+        mainText = q.word.japanese;
+        subText = q.word.reading;
+      }
+    }
 
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return PopScope(
       canPop: false,
@@ -250,7 +320,10 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Выйти', style: TextStyle(color: ColorConstants.error)),
+                child: const Text(
+                  'Выйти',
+                  style: TextStyle(color: ColorConstants.error),
+                ),
               ),
             ],
           ),
@@ -269,135 +342,143 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                flex: 2,
-                child: Card(
-                  elevation: 4,
-                  child: Stack(
-                    children: [
-                      GestureDetector(
-                        onLongPress: () {
-                          Clipboard.setData(ClipboardData(text: q.prompt));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                AppLocalizations.of(context)!.copiedToClipboard,
-                              ),
-                            ),
-                          );
-                        },
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  q.prompt,
-                                  style: const TextStyle(
-                                    fontSize: 48,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  textAlign: TextAlign.center,
+              if (!isKeyboardOpen) ...[
+                Expanded(
+                  flex: 2,
+                  child: Card(
+                    elevation: 4,
+                    child: Stack(
+                      children: [
+                        GestureDetector(
+                          onLongPress: () {
+                            Clipboard.setData(ClipboardData(text: q.prompt));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  AppLocalizations.of(
+                                    context,
+                                  )!.copiedToClipboard,
                                 ),
                               ),
-                              if (q.subtitle != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8.0),
-                                  child: Text(
-                                    q.subtitle!,
+                            );
+                          },
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                if ((q.type == 4 || q.type == 5) &&
+                                    !hasAnswered)
+                                  Column(
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(
+                                          Icons.volume_up,
+                                          size: 80,
+                                          color: primaryColor,
+                                        ),
+                                        onPressed: _playVoice,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        AppLocalizations.of(
+                                          context,
+                                        )!.listenToTheWord,
+                                        style: const TextStyle(fontSize: 24),
+                                      ),
+                                    ],
+                                  )
+                                else ...[
+                                  AutoSizeText(
+                                    mainText,
                                     style: const TextStyle(
-                                      fontSize: 24,
-                                      color: ColorConstants.textGrey,
-                                    ),
-                                  ),
-                                ),
-                              if (showTranslation)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 16.0),
-                                  child: Text(
-                                    q.word.translation,
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      color: primaryColor,
-                                      fontWeight: FontWeight.w500,
+                                      fontSize: 48,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                     textAlign: TextAlign.center,
+                                    maxLines: 3,
+                                    minFontSize: 24,
                                   ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (!(q.type == 3 && !hasAnswered))
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: IconButton(
-                            icon: Icon(
-                              Icons.volume_up,
-                              size: 32,
-                              color: primaryColor,
+                                  if (subText != null && subText.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 8.0),
+                                      child: Text(
+                                        subText,
+                                        style: const TextStyle(
+                                          fontSize: 24,
+                                          color: ColorConstants.textGrey,
+                                        ),
+                                      ),
+                                    ),
+                                  if (showTranslation)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 16.0),
+                                      child: Text(
+                                        q.word.translation,
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          color: primaryColor,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                ],
+                              ],
                             ),
-                            onPressed: _playVoice,
                           ),
                         ),
-                    ],
+                        // Hide small mic if:
+                        // 1. Not answered and type is Trans->Jap (to avoid hint)
+                        // 2. Not answered and type is Auditory (because big mic is shown)
+                        if (!(!hasAnswered &&
+                            (q.type == 3 ||
+                                q.type == 6 ||
+                                q.type == 7 ||
+                                q.type == 4 ||
+                                q.type == 5)))
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: IconButton(
+                              icon: Icon(
+                                Icons.volume_up,
+                                size: 32,
+                                color: primaryColor,
+                              ),
+                              onPressed: _playVoice,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              Expanded(
-                flex: 3,
-                child: ListView.builder(
-                  itemCount: q.options.length,
-                  itemBuilder: (context, index) {
-                    final option = q.options[index];
-
-                    Color buttonColor = ColorConstants.textWhite;
-                    Color textColor = ColorConstants.textPrimary;
-
-                    if (hasAnswered) {
-                      if (option == q.correctAnswer) {
-                        buttonColor = ColorConstants.successMedium;
-                        textColor = ColorConstants.textWhite;
-                      } else if (option == selectedOption) {
-                        buttonColor = ColorConstants.errorMedium;
-                        textColor = ColorConstants.textWhite;
-                      }
-                    }
-
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: buttonColor,
-                          foregroundColor: textColor,
-                          padding: const EdgeInsets.all(20),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 24),
+              ],
+              if (isKeyboardOpen)
+                Expanded(
+                  flex: 1,
+                  child: Card(
+                    elevation: 2,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: AutoSizeText(
+                          mainText,
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
                           ),
-                        ),
-                        onPressed: () => _onOptionSelected(option),
-                        onLongPress: () {
-                          Clipboard.setData(ClipboardData(text: option));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                AppLocalizations.of(context)!.copiedToClipboard,
-                              ),
-                            ),
-                          );
-                        },
-                        child: Text(
-                          option,
-                          style: const TextStyle(fontSize: 18),
                           textAlign: TextAlign.center,
+                          maxLines: 2,
+                          minFontSize: 16,
                         ),
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
+              Expanded(
+                flex: 3,
+                child: _buildAnswerArea(q, hasAnswered, selectedOption),
               ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -418,6 +499,268 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAnswerArea(
+    Question q,
+    bool hasAnswered,
+    String? selectedOption,
+  ) {
+    if (q.type == 6) {
+      return _buildTextInputArea(q, hasAnswered, selectedOption);
+    } else if (q.type == 7) {
+      return _buildConstructorArea(q, hasAnswered, selectedOption);
+    } else {
+      return _buildMultipleChoiceArea(q, hasAnswered, selectedOption);
+    }
+  }
+
+  Widget _buildTextInputArea(
+    Question q,
+    bool hasAnswered,
+    String? selectedOption,
+  ) {
+    Color? borderColor;
+    if (hasAnswered) {
+      if (selectedOption == q.correctAnswer) {
+        borderColor = ColorConstants.successMedium;
+      } else {
+        borderColor = ColorConstants.errorMedium;
+      }
+    }
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _textController,
+                enabled: !hasAnswered,
+                decoration: InputDecoration(
+                  hintText: AppLocalizations.of(context)!.typeYourAnswer,
+                  border: OutlineInputBorder(
+                    borderSide: borderColor != null
+                        ? BorderSide(color: borderColor, width: 2)
+                        : const BorderSide(),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: borderColor != null
+                        ? BorderSide(color: borderColor, width: 2)
+                        : const BorderSide(),
+                  ),
+                ),
+                onSubmitted: (val) {
+                  if (!hasAnswered && val.trim().isNotEmpty) {
+                    _onOptionSelected(val.trim());
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _textController,
+              builder: (context, value, child) {
+                return IconButton(
+                  icon: const Icon(Icons.send),
+                  color: Theme.of(context).colorScheme.primary,
+                  onPressed: (!hasAnswered && value.text.trim().isNotEmpty)
+                      ? () => _onOptionSelected(value.text.trim())
+                      : null,
+                );
+              },
+            ),
+          ],
+        ),
+        if (hasAnswered)
+          Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Column(
+              children: [
+                Text(
+                  'Ваш ответ: $selectedOption',
+                  style: TextStyle(
+                    color: selectedOption == q.correctAnswer
+                        ? ColorConstants.successMedium
+                        : ColorConstants.errorMedium,
+                    fontSize: 18,
+                  ),
+                ),
+                if (selectedOption != q.correctAnswer)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      'Правильный ответ: ${q.correctAnswer}',
+                      style: TextStyle(
+                        color: ColorConstants.successMedium,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildConstructorArea(
+    Question q,
+    bool hasAnswered,
+    String? selectedOption,
+  ) {
+    final constructedWord = _selectedCharIndices
+        .map((i) => q.options[i])
+        .join('');
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            constructedWord.isEmpty ? " " : constructedWord,
+            style: const TextStyle(fontSize: 24),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: List.generate(q.options.length, (index) {
+            final isSelected = _selectedCharIndices.contains(index);
+            return ElevatedButton(
+              onPressed: hasAnswered
+                  ? null
+                  : () {
+                      setState(() {
+                        if (isSelected) {
+                          _selectedCharIndices.remove(index);
+                        } else {
+                          _selectedCharIndices.add(index);
+                        }
+                      });
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isSelected ? Colors.grey[300] : null,
+                foregroundColor: isSelected ? Colors.grey[600] : null,
+              ),
+              child: Text(
+                q.options[index],
+                style: const TextStyle(fontSize: 20),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 24),
+        ElevatedButton(
+          onPressed: (!hasAnswered && constructedWord.isNotEmpty)
+              ? () => _onOptionSelected(constructedWord)
+              : null,
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+          ),
+          child: Text(
+            AppLocalizations.of(context)!.submitAnswer,
+            style: const TextStyle(fontSize: 18),
+          ),
+        ),
+        if (hasAnswered)
+          Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Column(
+              children: [
+                Text(
+                  'Ваш ответ: $selectedOption',
+                  style: TextStyle(
+                    color: selectedOption == q.correctAnswer
+                        ? ColorConstants.successMedium
+                        : ColorConstants.errorMedium,
+                    fontSize: 18,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                if (selectedOption != q.correctAnswer)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      'Правильный ответ: ${q.correctAnswer}',
+                      style: TextStyle(
+                        color: ColorConstants.successMedium,
+                        fontSize: 18,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMultipleChoiceArea(
+    Question q,
+    bool hasAnswered,
+    String? selectedOption,
+  ) {
+    return ListView.builder(
+      itemCount: q.options.length,
+      itemBuilder: (context, index) {
+        final option = q.options[index];
+
+        Color buttonColor = ColorConstants.textWhite;
+        Color textColor = ColorConstants.textPrimary;
+
+        if (hasAnswered) {
+          if (option == q.correctAnswer) {
+            buttonColor = ColorConstants.successMedium;
+            textColor = ColorConstants.textWhite;
+          } else if (option == selectedOption) {
+            buttonColor = ColorConstants.errorMedium;
+            textColor = ColorConstants.textWhite;
+          }
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: buttonColor,
+              foregroundColor: textColor,
+              padding: const EdgeInsets.all(20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: () => _onOptionSelected(option),
+            onLongPress: () {
+              Clipboard.setData(ClipboardData(text: option));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    AppLocalizations.of(context)!.copiedToClipboard,
+                  ),
+                ),
+              );
+            },
+            child: Text(
+              option,
+              style: const TextStyle(fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+      },
     );
   }
 }

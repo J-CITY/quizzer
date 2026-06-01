@@ -18,6 +18,7 @@ class EditCustomListScreen extends ConsumerStatefulWidget {
 class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
   late TextEditingController _nameController;
   late TextEditingController _sheetIdController;
+  String _language = 'ja-JP';
   bool _syncOnStartup = false;
   bool _isSaving = false;
 
@@ -30,6 +31,7 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
     _sheetIdController = TextEditingController(
       text: widget.customList?.googleSheetId ?? '',
     );
+    _language = widget.customList?.language ?? 'ja-JP';
     _syncOnStartup = widget.customList?.syncOnStartup ?? false;
   }
 
@@ -43,10 +45,13 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
 
     if (name.isEmpty) {
       if (sheetId.isNotEmpty) {
-        final fetchedName = await GoogleSheetsService.fetchSheetName(sheetId);
-        if (fetchedName != null && fetchedName.isNotEmpty) {
-          name = fetchedName;
+        final result = await GoogleSheetsService.fetchSheetNameAndLanguage(sheetId);
+        if (result != null && result.containsKey('name') && result['name']!.isNotEmpty) {
+          name = result['name']!;
           _nameController.text = name;
+          if (result.containsKey('language') && result['language']!.isNotEmpty) {
+            _language = result['language']!;
+          }
         } else {
           name = sheetId;
           _nameController.text = name;
@@ -67,6 +72,7 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
     final db = ref.read(databaseServiceProvider);
     final list = widget.customList ?? CustomList();
     list.name = name;
+    list.language = _language;
 
     if (sheetId.isNotEmpty) {
       list.googleSheetId = sheetId;
@@ -141,6 +147,28 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
               ),
               onChanged: (val) {
                 setState(() {});
+              },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _language,
+              decoration: InputDecoration(
+                labelText: 'Язык словаря (озвучка)',
+                border: const OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'ja-JP', child: Text('Японский (ja-JP)')),
+                DropdownMenuItem(value: 'en-US', child: Text('Английский (en-US)')),
+                DropdownMenuItem(value: 'es-ES', child: Text('Испанский (es-ES)')),
+                DropdownMenuItem(value: 'ru-RU', child: Text('Русский (ru-RU)')),
+                DropdownMenuItem(value: 'de-DE', child: Text('Немецкий (de-DE)')),
+                DropdownMenuItem(value: 'fr-FR', child: Text('Французский (fr-FR)')),
+                DropdownMenuItem(value: 'it-IT', child: Text('Итальянский (it-IT)')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => _language = val);
+                }
               },
             ),
             const SizedBox(height: 16),

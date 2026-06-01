@@ -22,6 +22,7 @@
   "@trainingResultsMistakes": { "placeholders": { "count": { "type": "String" } } },
   "settingsTitle": "Settings",
   "settingsQuestionsCount": "Number of questions",
+  "settingsLearningQueueSize": "Learning queue size",
   "settingsSheetId": "Google Sheet ID",
   "settingsSheetIdHint": "Example: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
   "settingsNotifications": "Notifications",
@@ -75,5 +76,12 @@
   "freq2h": "2 hours",
   "freq3h": "3 hours",
   "freq6h": "6 hours",
-  "freq1d": "1 time a day"
+  "freq1d": "1 time a day",
+  "questionVoiceToTranslate": "Audio -> Translation",
+  "questionVoiceToWord": "Audio -> Japanese",
+  "questionTranslateToWordInput": "Translation -> Japanese (input)",
+  "questionTranslateToWordConstructor": "Translation -> Japanese (constructor)",
+  "listenToTheWord": "Listen to the word",
+  "submitAnswer": "Submit",
+  "typeYourAnswer": "Type your answer..."
 }

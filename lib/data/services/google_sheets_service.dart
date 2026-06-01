@@ -9,7 +9,7 @@ final googleSheetsServiceProvider = Provider<GoogleSheetsService>((ref) {
 });
 
 class GoogleSheetsService {
-  static Future<String?> fetchSheetName(String sheetId) async {
+  static Future<Map<String, String>?> fetchSheetNameAndLanguage(String sheetId) async {
     try {
       final url = Uri.parse(
         'https://docs.google.com/spreadsheets/d/$sheetId/htmlview',
@@ -26,9 +26,22 @@ class GoogleSheetsService {
           }
           title = title.trim();
           if (title.isEmpty) {
-            return 'Google Sheet';
+            return {'name': 'Google Sheet'};
           }
-          return title;
+          
+          String? language;
+          // Parse language from brackets, e.g., [en-US]
+          final langRegex = RegExp(r'\[([a-zA-Z]{2}-[a-zA-Z]{2})\]');
+          final langMatch = langRegex.firstMatch(title);
+          if (langMatch != null) {
+            language = langMatch.group(1);
+            title = title.replaceFirst(langMatch.group(0)!, '').trim();
+          }
+
+          return {
+            'name': title,
+            if (language != null) 'language': language,
+          };
         }
       }
     } catch (_) {}
@@ -92,6 +105,7 @@ class GoogleSheetsService {
       );
     }
   }
+
   static Future<List<String>> fetchConfusableGroups(String sheetId) async {
     final url = Uri.parse(
       'https://docs.google.com/spreadsheets/d/$sheetId/export?format=csv',
@@ -109,7 +123,7 @@ class GoogleSheetsService {
       for (int i = 0; i < rows.length; i++) {
         final row = rows[i];
         if (row.isEmpty) continue;
-        
+
         final firstCol = row[0].toString().trim();
         // Remove spaces inside the string if any, assuming characters are just listed
         final group = firstCol.replaceAll(' ', '');

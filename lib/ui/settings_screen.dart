@@ -80,6 +80,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               TextFormField(
+                key: ValueKey('qc_${settings.questionsCount}'),
                 initialValue: settings.questionsCount.toString(),
                 decoration: InputDecoration(
                   labelText: AppLocalizations.of(
@@ -89,7 +90,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 keyboardType: TextInputType.number,
                 onFieldSubmitted: (val) {
                   _updateSettings(settings, () {
-                    settings.questionsCount = int.tryParse(val) ?? 50;
+                    int newCount = int.tryParse(val) ?? 50;
+                    if (newCount < 1) newCount = 1;
+                    if (newCount > settings.learningQueueSize) {
+                      settings.learningQueueSize = newCount;
+                    }
+                    settings.questionsCount = newCount;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                key: ValueKey('lqs_${settings.learningQueueSize}'),
+                initialValue: settings.learningQueueSize.toString(),
+                decoration: InputDecoration(
+                  labelText: AppLocalizations.of(
+                    context,
+                  )!.settingsLearningQueueSize,
+                ),
+                keyboardType: TextInputType.number,
+                onFieldSubmitted: (val) {
+                  _updateSettings(settings, () {
+                    int newSize = int.tryParse(val) ?? 50;
+                    if (newSize < settings.questionsCount) {
+                      newSize = settings.questionsCount;
+                    }
+                    settings.learningQueueSize = newSize;
                   });
                 },
               ),
@@ -354,6 +380,54 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       if (val != null) {
                         _updateSettings(settings, () {
                           settings.questionReadingToWord = val;
+                          _ensureOneQuestionType(settings);
+                        });
+                      }
+                    },
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionVoiceToTranslate),
+                    value: settings.questionVoiceToTranslate,
+                    onChanged: (val) {
+                      if (val != null) {
+                        _updateSettings(settings, () {
+                          settings.questionVoiceToTranslate = val;
+                          _ensureOneQuestionType(settings);
+                        });
+                      }
+                    },
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionVoiceToWord),
+                    value: settings.questionVoiceToWord,
+                    onChanged: (val) {
+                      if (val != null) {
+                        _updateSettings(settings, () {
+                          settings.questionVoiceToWord = val;
+                          _ensureOneQuestionType(settings);
+                        });
+                      }
+                    },
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionTranslateToWordInput),
+                    value: settings.questionTranslateToWordInput,
+                    onChanged: (val) {
+                      if (val != null) {
+                        _updateSettings(settings, () {
+                          settings.questionTranslateToWordInput = val;
+                          _ensureOneQuestionType(settings);
+                        });
+                      }
+                    },
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionTranslateToWordConstructor),
+                    value: settings.questionTranslateToWordConstructor,
+                    onChanged: (val) {
+                      if (val != null) {
+                        _updateSettings(settings, () {
+                          settings.questionTranslateToWordConstructor = val;
                           _ensureOneQuestionType(settings);
                         });
                       }

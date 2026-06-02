@@ -8,7 +8,7 @@ class LottieColorShift {
   static Future<String> shiftLottieHue(String assetPath, Color targetColor) async {
     final String jsonStr = await rootBundle.loadString(assetPath);
     
-    if (targetColor.value == const Color(0xFFBA0202).value) {
+    if (targetColor.toARGB32() == const Color(0xFFBA0202).toARGB32()) {
       return jsonStr;
     }
 

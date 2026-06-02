@@ -56,22 +56,8 @@ class QuizzerApp extends StatelessWidget {
     return MaterialApp(
       title: 'Quizzer',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: ColorConstants.seedColorLight,
-          brightness: Brightness.light,
-        ),
-        fontFamilyFallback: const ['Yu Gothic', 'Meiryo', 'Noto Sans JP'],
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: ColorConstants.seedColorDark,
-          brightness: Brightness.dark,
-        ),
-        fontFamilyFallback: const ['Yu Gothic', 'Meiryo', 'Noto Sans JP'],
-        useMaterial3: true,
-      ),
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       localizationsDelegates: const [
         AppLocalizations.delegate,

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:lottie/lottie.dart';
-import 'package:quizzer/l10n/app_localizations.dart';
 import '../data/models/word.dart';
 import '../data/models/custom_list.dart';
 import '../data/models/training_session.dart';
@@ -151,14 +150,14 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           barTouchData: BarTouchData(
             enabled: true,
             touchTooltipData: BarTouchTooltipData(
-              getTooltipColor: (group) => ColorConstants.primary,
+              getTooltipColor: (group) => Theme.of(context).colorScheme.primary,
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
                 final day = group.x + 1;
                 final count = rod.toY.toInt();
                 return BarTooltipItem(
                   '$day числа\n$count тренировок',
-                  const TextStyle(
-                    color: ColorConstants.textWhite,
+                  TextStyle(
+                    color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
                 );
@@ -175,7 +174,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   if (day % 5 == 0 || day == 1 || day == daysInMonth) {
                     return Text(
                       day.toString(),
-                      style: const TextStyle(fontSize: 10),
+                      style: TextStyle(fontSize: 10),
                     );
                   }
                   return const SizedBox();
@@ -190,7 +189,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   if (value == value.toInt()) {
                     return Text(
                       value.toInt().toString(),
-                      style: const TextStyle(fontSize: 10),
+                      style: TextStyle(fontSize: 10),
                     );
                   }
                   return const SizedBox();
@@ -216,7 +215,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
               barRods: [
                 BarChartRodData(
                   toY: _showCharts ? sessionCounts[i].toDouble() : 0,
-                  color: primaryColor,
+                  color: Theme.of(context).extension<AppColorsExtension>()!.chart,
                   width: 8,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(4),
@@ -254,7 +253,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
             children: [
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
@@ -274,13 +273,13 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                         centerSpaceRadius: 32,
                         sections: [
                           PieChartSectionData(
-                            color: ColorConstants.success,
+                            color: Theme.of(context).extension<AppColorsExtension>()!.success,
                             value: _showCharts ? learnedPercent : 0,
                             title: '',
                             radius: 14,
                           ),
                           PieChartSectionData(
-                            color: ColorConstants.borderGrey,
+                            color: Theme.of(context).extension<AppColorsExtension>()!.border,
                             value: _showCharts ? unlearnedPercent : 100,
                             title: '',
                             radius: 10,
@@ -290,15 +289,15 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                       swapAnimationDuration: const Duration(milliseconds: 400),
                     ),
                     if (allLearned)
-                      const Icon(
+                      Icon(
                         Icons.check_circle,
-                        color: ColorConstants.success,
+                        color: Theme.of(context).extension<AppColorsExtension>()!.success,
                         size: 40,
                       )
                     else
                       Text(
                         '$learned / $total',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                   ],
                 ),
@@ -355,10 +354,10 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                             foreground: Paint()
                               ..style = PaintingStyle.stroke
                               ..strokeWidth = 4
-                              ..color = ColorConstants.textPrimary,
-                            shadows: const [
+                              ..color = Theme.of(context).extension<AppColorsExtension>()!.textPrimary,
+                            shadows: [
                               Shadow(
-                                color: ColorConstants.textSecondary,
+                                color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary,
                                 blurRadius: 12,
                                 offset: Offset(2, 4),
                               ),
@@ -367,10 +366,10 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                         ),
                         Text(
                           '$_streak',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 72,
                             fontWeight: FontWeight.bold,
-                            color: ColorConstants.textWhite,
+                            color: Colors.white,
                           ),
                         ),
                       ],
@@ -379,9 +378,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 ],
               ),
             ),
-            const Text(
+            Text(
               'Дней подряд',
-              style: TextStyle(fontSize: 18, color: ColorConstants.textGrey),
+              style: TextStyle(fontSize: 18, color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary),
             ),
             const SizedBox(height: 32),
 

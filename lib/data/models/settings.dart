@@ -10,6 +10,7 @@ class Settings {
   int learningQueueSize = 50;
 
   bool notificationsEnabled = true;
+  bool streakNotificationsEnabled = false;
 
   int notificationIntervalMinutes = 60;
 
@@ -28,6 +29,8 @@ class Settings {
 
   bool questionVoiceToTranslate = false;
   bool questionVoiceToWord = false;
+  bool questionVoiceToWordInput = false;
+  bool questionVoiceToWordConstructor = false;
   bool questionTranslateToWordInput = false;
   bool questionTranslateToWordConstructor = false;
 

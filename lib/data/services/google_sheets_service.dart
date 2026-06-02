@@ -48,10 +48,17 @@ class GoogleSheetsService {
     return null;
   }
 
-  static Future<List<Word>> fetchWords(String sheetId) async {
-    final url = Uri.parse(
-      'https://docs.google.com/spreadsheets/d/$sheetId/export?format=csv',
-    );
+  static Future<List<Word>> fetchWords(String sheetId, {String? sheetName}) async {
+    Uri url;
+    if (sheetName != null && sheetName.trim().isNotEmpty) {
+      url = Uri.parse(
+        'https://docs.google.com/spreadsheets/d/$sheetId/gviz/tq?tqx=out:csv&sheet=${Uri.encodeQueryComponent(sheetName.trim())}',
+      );
+    } else {
+      url = Uri.parse(
+        'https://docs.google.com/spreadsheets/d/$sheetId/export?format=csv',
+      );
+    }
 
     final response = await http.get(url);
 

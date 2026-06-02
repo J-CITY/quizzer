@@ -29,7 +29,7 @@ class CustomListsTab extends ConsumerWidget {
             return Center(
               child: Text(
                 AppLocalizations.of(context)!.noCustomLists,
-                style: TextStyle(fontSize: 16, color: ColorConstants.textGrey),
+                style: TextStyle(fontSize: 16, color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary),
               ),
             );
           }
@@ -50,7 +50,7 @@ class CustomListsTab extends ConsumerWidget {
                     )!.wordsCount(list.words.length.toString()),
                   ),
                   trailing: IconButton(
-                    icon: const Icon(Icons.settings),
+                    icon: Icon(Icons.settings),
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -90,8 +90,8 @@ class CustomListsTab extends ConsumerWidget {
           );
         },
         backgroundColor: primaryColor,
-        foregroundColor: ColorConstants.textWhite,
-        child: const Icon(Icons.add),
+        foregroundColor: Colors.white,
+        child: Icon(Icons.add),
       ),
     );
   }

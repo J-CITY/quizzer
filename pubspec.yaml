@@ -51,6 +51,8 @@ dependencies:
   fl_chart: ^1.2.0
   lottie: ^3.3.3
   auto_size_text: ^3.0.0
+  material_symbols_icons: ^4.2928.1
+  flutter_svg: ^2.3.0
 
 dev_dependencies:
   flutter_test:
@@ -64,6 +66,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   isar_generator: ^3.1.0
   build_runner: ^2.4.9
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -107,3 +110,11 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/icon.png"
+  image_path_ios: "assets/images/icon_ios.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/icon.png"
+  adaptive_icon_monochrome: "assets/images/mask.png"

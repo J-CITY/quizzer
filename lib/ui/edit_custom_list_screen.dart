@@ -18,6 +18,7 @@ class EditCustomListScreen extends ConsumerStatefulWidget {
 class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
   late TextEditingController _nameController;
   late TextEditingController _sheetIdController;
+  late TextEditingController _sheetTabNameController;
   String _language = 'ja-JP';
   bool _syncOnStartup = false;
   bool _isSaving = false;
@@ -31,6 +32,9 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
     _sheetIdController = TextEditingController(
       text: widget.customList?.googleSheetId ?? '',
     );
+    _sheetTabNameController = TextEditingController(
+      text: widget.customList?.googleSheetTabName ?? '',
+    );
     _language = widget.customList?.language ?? 'ja-JP';
     _syncOnStartup = widget.customList?.syncOnStartup ?? false;
   }
@@ -42,6 +46,7 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
 
     String name = _nameController.text.trim();
     final sheetId = _sheetIdController.text.trim();
+    final sheetTabName = _sheetTabNameController.text.trim();
 
     if (name.isEmpty) {
       if (sheetId.isNotEmpty) {
@@ -76,9 +81,11 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
 
     if (sheetId.isNotEmpty) {
       list.googleSheetId = sheetId;
+      list.googleSheetTabName = sheetTabName.isEmpty ? null : sheetTabName;
       list.syncOnStartup = _syncOnStartup;
     } else {
       list.googleSheetId = null;
+      list.googleSheetTabName = null;
       list.syncOnStartup = false;
     }
 
@@ -86,7 +93,7 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
 
     if (sheetId.isNotEmpty) {
       try {
-        final words = await GoogleSheetsService.fetchWords(sheetId);
+        final words = await GoogleSheetsService.fetchWords(sheetId, sheetName: list.googleSheetTabName);
         await db.syncWordsForList(list, words);
       } catch (e) {
         if (mounted) {
@@ -122,7 +129,7 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
               ),
             )
           else
-            IconButton(icon: const Icon(Icons.check), onPressed: _save),
+            IconButton(icon: Icon(Icons.check), onPressed: _save),
         ],
       ),
       body: Padding(
@@ -150,13 +157,22 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
               },
             ),
             const SizedBox(height: 16),
+            TextField(
+              controller: _sheetTabNameController,
+              decoration: const InputDecoration(
+                labelText: 'Имя листа (опционально)',
+                hintText: 'Например: Sheet1',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _language,
+              initialValue: _language,
               decoration: InputDecoration(
                 labelText: 'Язык словаря (озвучка)',
                 border: const OutlineInputBorder(),
               ),
-              items: const [
+              items: [
                 DropdownMenuItem(value: 'ja-JP', child: Text('Японский (ja-JP)')),
                 DropdownMenuItem(value: 'en-US', child: Text('Английский (en-US)')),
                 DropdownMenuItem(value: 'es-ES', child: Text('Испанский (es-ES)')),

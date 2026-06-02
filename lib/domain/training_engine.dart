@@ -9,6 +9,19 @@ final trainingEngineProvider = Provider<TrainingEngine>((ref) {
   return TrainingEngine();
 });
 
+class QuestionType {
+  static const int japToReading = 0;
+  static const int readingToJap = 1;
+  static const int japToTrans = 2;
+  static const int transToJap = 3;
+  static const int voiceToTrans = 4;
+  static const int voiceToJap = 5;
+  static const int transToJapInput = 6;
+  static const int transToJapConstructor = 7;
+  static const int voiceToJapInput = 8;
+  static const int voiceToJapConstructor = 9;
+}
+
 class Question {
   final Word word;
   final String prompt; // e.g. Japanese word
@@ -63,21 +76,23 @@ class TrainingEngine {
   Question _generateQuestion(Word word, List<Word> allWords, Settings settings) {
     List<int> availableTypes = [];
     
-    if (settings.questionWordToTranslate) availableTypes.add(2); // Jap->Trans
-    if (settings.questionTranslateToWord) availableTypes.add(3); // Trans->Jap
+    if (settings.questionWordToTranslate) availableTypes.add(QuestionType.japToTrans);
+    if (settings.questionTranslateToWord) availableTypes.add(QuestionType.transToJap);
     if (settings.questionWordToReading && word.reading != null && word.reading!.isNotEmpty) {
-      availableTypes.add(0); // Jap->Read
+      availableTypes.add(QuestionType.japToReading);
     }
     if (settings.questionReadingToWord && word.reading != null && word.reading!.isNotEmpty) {
-      availableTypes.add(1); // Read->Jap
+      availableTypes.add(QuestionType.readingToJap);
     }
-    if (settings.questionVoiceToTranslate) availableTypes.add(4); // Voice->Trans
-    if (settings.questionVoiceToWord) availableTypes.add(5); // Voice->Jap
-    if (settings.questionTranslateToWordInput) availableTypes.add(6); // Trans->Jap (Input)
-    if (settings.questionTranslateToWordConstructor) availableTypes.add(7); // Trans->Jap (Constructor)
+    if (settings.questionVoiceToTranslate) availableTypes.add(QuestionType.voiceToTrans);
+    if (settings.questionVoiceToWord) availableTypes.add(QuestionType.voiceToJap);
+    if (settings.questionVoiceToWordInput) availableTypes.add(QuestionType.voiceToJapInput);
+    if (settings.questionVoiceToWordConstructor) availableTypes.add(QuestionType.voiceToJapConstructor);
+    if (settings.questionTranslateToWordInput) availableTypes.add(QuestionType.transToJapInput);
+    if (settings.questionTranslateToWordConstructor) availableTypes.add(QuestionType.transToJapConstructor);
 
     if (availableTypes.isEmpty) {
-      availableTypes.add(2); // Fallback
+      availableTypes.add(QuestionType.japToTrans); // Fallback
     }
 
     final type = availableTypes[_random.nextInt(availableTypes.length)];
@@ -97,43 +112,43 @@ class TrainingEngine {
     }
 
     switch (type) {
-      case 0: // Japanese -> Reading
+      case QuestionType.japToReading:
         prompt = word.japanese;
         correctAnswer = word.reading!;
         wrongOptions = _getWrongOptions(allWords, word, (w) => w.reading, true, settings);
         break;
-      case 1: // Reading -> Japanese
+      case QuestionType.readingToJap:
         prompt = word.reading!;
         correctAnswer = word.japanese;
         wrongOptions = _getWrongOptions(allWords, word, (w) => w.japanese, true, settings);
         break;
-      case 2: // Japanese (+reading) -> Translation
+      case QuestionType.japToTrans:
         prompt = word.japanese;
         subtitle = word.reading;
         correctAnswer = word.translation;
         wrongOptions = _getWrongOptions(allWords, word, (w) => w.translation, false, settings);
         break;
-      case 3: // Translation -> Japanese (+reading)
+      case QuestionType.transToJap:
         prompt = word.translation;
         correctAnswer = getJapaneseDisplay(word);
         wrongOptions = _getWrongOptions(allWords, word, getJapaneseDisplay, true, settings);
         break;
-      case 4: // Voice -> Translation
+      case QuestionType.voiceToTrans:
         prompt = ''; // handled in UI
         correctAnswer = word.translation;
         wrongOptions = _getWrongOptions(allWords, word, (w) => w.translation, false, settings);
         break;
-      case 5: // Voice -> Japanese
+      case QuestionType.voiceToJap:
         prompt = ''; // handled in UI
         correctAnswer = getJapaneseDisplay(word);
         wrongOptions = _getWrongOptions(allWords, word, getJapaneseDisplay, true, settings);
         break;
-      case 6: // Translation -> Japanese (Input)
+      case QuestionType.transToJapInput:
         prompt = word.translation;
         correctAnswer = word.japanese;
         wrongOptions = [];
         break;
-      case 7: // Translation -> Japanese (Constructor)
+      case QuestionType.transToJapConstructor:
         prompt = word.translation;
         correctAnswer = word.japanese;
         
@@ -151,6 +166,31 @@ class TrainingEngine {
         }
         
         customOptions = [...correctChars, ...extraChars]..shuffle(_random);
+        wrongOptions = [];
+        break;
+      case QuestionType.voiceToJapInput:
+        prompt = ''; // Handled in UI
+        correctAnswer = word.japanese;
+        wrongOptions = [];
+        break;
+      case QuestionType.voiceToJapConstructor:
+        prompt = ''; // Handled in UI
+        correctAnswer = word.japanese;
+        
+        final correctChars2 = word.japanese.split('');
+        final extraCharsCount2 = min(6, correctChars2.length);
+        final extraChars2 = <String>[];
+        final allChars2 = allWords.map((w) => w.japanese).join('').split('');
+        allChars2.shuffle(_random);
+        
+        for (final c in allChars2) {
+          if (!correctChars2.contains(c) && !extraChars2.contains(c) && c.trim().isNotEmpty) {
+            extraChars2.add(c);
+            if (extraChars2.length >= extraCharsCount2) break;
+          }
+        }
+        
+        customOptions = [...correctChars2, ...extraChars2]..shuffle(_random);
         wrongOptions = [];
         break;
     }

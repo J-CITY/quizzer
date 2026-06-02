@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quizzer/l10n/app_localizations.dart';
+import '../data/services/notification_service.dart';
 import 'settings_screen.dart';
 import 'custom_lists_tab.dart';
 import 'statistics_screen.dart';
@@ -14,10 +15,17 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _tabs = const [
-    StatisticsScreen(),
-    CustomListsTab(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _requestNotificationPermissions();
+  }
+
+  Future<void> _requestNotificationPermissions() async {
+    await NotificationService.requestPermissions();
+  }
+
+  final List<Widget> _tabs = [StatisticsScreen(), CustomListsTab()];
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Text(AppLocalizations.of(context)!.settingsTitle),
               ),
             ],
-          )
+          ),
         ],
       ),
       body: _tabs[_currentIndex],
@@ -58,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Статистика', // Or localized string
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.list),
+            icon: Icon(Icons.list),
             label: AppLocalizations.of(context)!.tabCustomLists,
           ),
         ],
@@ -66,4 +74,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-

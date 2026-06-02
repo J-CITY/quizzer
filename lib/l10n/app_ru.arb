@@ -80,6 +80,8 @@
   "freq1d": "1 раз в день",
   "questionVoiceToTranslate": "Аудирование -> Перевод",
   "questionVoiceToWord": "Аудирование -> Японский",
+  "questionVoiceToWordInput": "Аудирование -> Японский (ввод)",
+  "questionVoiceToWordConstructor": "Аудирование -> Японский (конструктор)",
   "questionTranslateToWordInput": "Перевод -> Японский (ввод)",
   "questionTranslateToWordConstructor": "Перевод -> Японский (конструктор)",
   "listenToTheWord": "Слушайте слово",

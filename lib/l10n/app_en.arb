@@ -79,6 +79,8 @@
   "freq1d": "1 time a day",
   "questionVoiceToTranslate": "Audio -> Translation",
   "questionVoiceToWord": "Audio -> Japanese",
+  "questionVoiceToWordInput": "Audio -> Japanese (input)",
+  "questionVoiceToWordConstructor": "Audio -> Japanese (constructor)",
   "questionTranslateToWordInput": "Translation -> Japanese (input)",
   "questionTranslateToWordConstructor": "Translation -> Japanese (constructor)",
   "listenToTheWord": "Listen to the word",

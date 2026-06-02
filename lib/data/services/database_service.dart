@@ -40,6 +40,7 @@ class DatabaseService {
 
     await _initSettings();
     await _applySpacedRepetition();
+    await cleanUpOrphanedWords();
   }
 
   Future<void> _initSettings() async {
@@ -104,20 +105,14 @@ class DatabaseService {
 
       await isar.words.putAll(updatedOrNewWords);
 
-      // We should also delete words that were in the list but are no longer in the spreadsheet!
-      final wordsToDelete = localWordsInList
-          .where((w) => !downloadedIds.contains(w.sheetId))
-          .toList();
-      for (var w in wordsToDelete) {
-        await isar.words.delete(w.id);
-      }
-
       // Replace the custom list's words completely
       list.words.clear();
       list.words.addAll(updatedOrNewWords);
       await isar.customLists.put(list);
       await list.words.save();
     });
+
+    await cleanUpOrphanedWords();
   }
 
   /// Lowers progress by 1 if a word was learned but hasn't been trained for >= 7 days
@@ -217,9 +212,34 @@ class DatabaseService {
   }
 
   Future<void> deleteCustomList(int id) async {
-    await isar.writeTxn(() async {
-      await isar.customLists.delete(id);
-    });
+    final list = await isar.customLists.get(id);
+    if (list != null) {
+      await isar.writeTxn(() async {
+        await isar.customLists.delete(id);
+      });
+      await cleanUpOrphanedWords();
+    }
+  }
+
+  Future<void> cleanUpOrphanedWords() async {
+    final lists = await isar.customLists.where().findAll();
+    final usedWordIds = <int>{};
+    for (var list in lists) {
+      await list.words.load();
+      usedWordIds.addAll(list.words.map((w) => w.id));
+    }
+    
+    final allWords = await isar.words.where().findAll();
+    final wordsToDelete = allWords
+        .where((w) => !usedWordIds.contains(w.id))
+        .map((w) => w.id)
+        .toList();
+    
+    if (wordsToDelete.isNotEmpty) {
+      await isar.writeTxn(() async {
+        await isar.words.deleteAll(wordsToDelete);
+      });
+    }
   }
 
   // --- Training Sessions Methods ---

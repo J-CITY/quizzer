@@ -1,0 +1,30 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Маска 1: вырезает прозрачный зазор из нижней карточки -->
+    <mask id="cutout-mask" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+      <rect width="256" height="256" fill="white" />
+      <g transform="translate(116, 105) rotate(-10)">
+        <rect x="-75" y="-60" width="150" height="120" rx="20" fill="black" stroke="black" stroke-width="12" stroke-linejoin="round" />
+      </g>
+    </mask>
+    <!-- Маска 2: вырезает текст "Hello" из верхней карточки -->
+    <mask id="text-mask">
+      <!-- Белый фон: оставляет саму карточку видимой -->
+      <rect x="-100" y="-100" width="200" height="200" fill="white" />
+      <!-- Черный текст: прорезает дыру в форме букв (до полной прозрачности) -->
+      <text x="0" y="12" font-family="'Google Sans', Roboto, 'Segoe UI', sans-serif" font-weight="600" font-size="48" fill="black" text-anchor="middle">Hello</text>
+    </mask>
+  </defs>
+  <!-- Задняя карточка -->
+  <!-- Применяем маску выреза к неподвижной группе -->
+  <g mask="url(#cutout-mask)">
+    <g transform="translate(140, 150) rotate(12)">
+      <rect x="-65" y="-55" width="130" height="110" rx="20" fill="#000000" />
+    </g>
+  </g>
+  <!-- Передняя карточка -->
+  <g transform="translate(116, 105) rotate(-10)">
+    <!-- Применяем текстовую маску к самой карточке. Тег <text> ниже больше не нужен! -->
+    <rect x="-75" y="-60" width="150" height="120" rx="20" fill="#000000" mask="url(#text-mask)" />
+  </g>
+</svg>

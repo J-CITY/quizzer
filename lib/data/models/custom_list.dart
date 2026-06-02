@@ -10,6 +10,7 @@ class CustomList {
   late String name;
 
   String? googleSheetId;
+  String? googleSheetTabName;
 
   String language = 'ja-JP';
 

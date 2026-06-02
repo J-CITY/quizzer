@@ -63,7 +63,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (!settings.questionWordToTranslate &&
         !settings.questionTranslateToWord &&
         !settings.questionWordToReading &&
-        !settings.questionReadingToWord) {
+        !settings.questionReadingToWord &&
+        !settings.questionVoiceToTranslate &&
+        !settings.questionVoiceToWord &&
+        !settings.questionVoiceToWordInput &&
+        !settings.questionVoiceToWordConstructor &&
+        !settings.questionTranslateToWordInput &&
+        !settings.questionTranslateToWordConstructor) {
       settings.questionWordToTranslate = true;
     }
   }
@@ -133,6 +139,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     settings.notificationsEnabled = val;
                   });
                   if (val) {
+                    NotificationService.updateSchedule(
+                      settings.notificationIntervalMinutes,
+                    );
+                  } else {
+                    if (!settings.streakNotificationsEnabled) {
+                      NotificationService.cancelSchedule();
+                    }
+                  }
+                },
+              ),
+              SwitchListTile(
+                title: const Text('Уведомления об утере стрика'),
+                subtitle: const Text('Напоминание около 21:00, если вы еще не тренировались сегодня'),
+                value: settings.streakNotificationsEnabled,
+                onChanged: (val) {
+                  _updateSettings(settings, () {
+                    settings.streakNotificationsEnabled = val;
+                  });
+                  if (val || settings.notificationsEnabled) {
                     NotificationService.updateSchedule(
                       settings.notificationIntervalMinutes,
                     );
@@ -303,7 +328,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   },
                 ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.sync),
+                  icon: Icon(Icons.sync),
                   tooltip: AppLocalizations.of(context)!.settingsSyncConfusable,
                   onPressed: () async {
                     if (settings.confusableCharactersSheetId == null || settings.confusableCharactersSheetId!.isEmpty) return;
@@ -404,6 +429,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       if (val != null) {
                         _updateSettings(settings, () {
                           settings.questionVoiceToWord = val;
+                          _ensureOneQuestionType(settings);
+                        });
+                      }
+                    },
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionVoiceToWordInput),
+                    value: settings.questionVoiceToWordInput,
+                    onChanged: (val) {
+                      if (val != null) {
+                        _updateSettings(settings, () {
+                          settings.questionVoiceToWordInput = val;
+                          _ensureOneQuestionType(settings);
+                        });
+                      }
+                    },
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionVoiceToWordConstructor),
+                    value: settings.questionVoiceToWordConstructor,
+                    onChanged: (val) {
+                      if (val != null) {
+                        _updateSettings(settings, () {
+                          settings.questionVoiceToWordConstructor = val;
                           _ensureOneQuestionType(settings);
                         });
                       }

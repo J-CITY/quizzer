@@ -1,10 +1,148 @@
 import 'package:flutter/material.dart';
 
-class ColorConstants {
-  static const seedColorLight = Colors.deepPurple;
-  static const seedColorDark = Colors.deepPurple;
+class AppColorsExtension extends ThemeExtension<AppColorsExtension> {
+  final Color success;
+  final Color chart;
+  final Color border;
+  final Color textSecondary;
+  final Color textPrimary;
+  
+  // Custom shades for UI
+  final Color successBackground;
+  final Color successText;
+  final Color errorBackground;
+  final Color iconBlue;
+  final Color buttonDisabled;
 
-  // Streak colors
+  const AppColorsExtension({
+    required this.success,
+    required this.chart,
+    required this.border,
+    required this.textSecondary,
+    required this.textPrimary,
+    required this.successBackground,
+    required this.successText,
+    required this.errorBackground,
+    required this.iconBlue,
+    required this.buttonDisabled,
+  });
+
+  @override
+  ThemeExtension<AppColorsExtension> copyWith({
+    Color? success,
+    Color? chart,
+    Color? border,
+    Color? textSecondary,
+    Color? textPrimary,
+    Color? successBackground,
+    Color? successText,
+    Color? errorBackground,
+    Color? iconBlue,
+    Color? buttonDisabled,
+  }) {
+    return AppColorsExtension(
+      success: success ?? this.success,
+      chart: chart ?? this.chart,
+      border: border ?? this.border,
+      textSecondary: textSecondary ?? this.textSecondary,
+      textPrimary: textPrimary ?? this.textPrimary,
+      successBackground: successBackground ?? this.successBackground,
+      successText: successText ?? this.successText,
+      errorBackground: errorBackground ?? this.errorBackground,
+      iconBlue: iconBlue ?? this.iconBlue,
+      buttonDisabled: buttonDisabled ?? this.buttonDisabled,
+    );
+  }
+
+  @override
+  ThemeExtension<AppColorsExtension> lerp(
+    covariant ThemeExtension<AppColorsExtension>? other,
+    double t,
+  ) {
+    if (other is! AppColorsExtension) {
+      return this;
+    }
+    return AppColorsExtension(
+      success: Color.lerp(success, other.success, t)!,
+      chart: Color.lerp(chart, other.chart, t)!,
+      border: Color.lerp(border, other.border, t)!,
+      textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
+      textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
+      successBackground: Color.lerp(successBackground, other.successBackground, t)!,
+      successText: Color.lerp(successText, other.successText, t)!,
+      errorBackground: Color.lerp(errorBackground, other.errorBackground, t)!,
+      iconBlue: Color.lerp(iconBlue, other.iconBlue, t)!,
+      buttonDisabled: Color.lerp(buttonDisabled, other.buttonDisabled, t)!,
+    );
+  }
+}
+
+class AppTheme {
+  static final lightExtension = AppColorsExtension(
+    success: const Color(0xFF16A34A),
+    chart: const Color(0xFFEAB308),
+    border: const Color(0xFFE5E7EB),
+    textSecondary: const Color(0xFF6B7280),
+    textPrimary: const Color(0xFF111827),
+    successBackground: const Color(0xFF16A34A).withValues(alpha: 0.1),
+    successText: const Color(0xFF14532D), // dark green
+    errorBackground: const Color(0xFFDC2626).withValues(alpha: 0.1),
+    iconBlue: const Color(0xFF3B82F6),
+    buttonDisabled: Colors.grey.shade400,
+  );
+
+  static final darkExtension = AppColorsExtension(
+    success: const Color(0xFF22C55E),
+    chart: const Color(0xFFFACC15),
+    border: const Color(0xFF334155),
+    textSecondary: const Color(0xFF94A3B8),
+    textPrimary: const Color(0xFFF8FAFC),
+    successBackground: const Color(0xFF22C55E).withValues(alpha: 0.15),
+    successText: const Color(0xFF86EFAC), // light green
+    errorBackground: const Color(0xFFF87171).withValues(alpha: 0.15),
+    iconBlue: const Color(0xFF60A5FA),
+    buttonDisabled: Colors.grey.shade700,
+  );
+
+  static final ThemeData lightTheme = ThemeData(
+    brightness: Brightness.light,
+    scaffoldBackgroundColor: const Color(0xFFF7F8FC),
+    colorScheme: const ColorScheme.light(
+      primary: Color(0xFF5B4FE9),
+      secondary: Color(0xFF3B82F6),
+      error: Color(0xFFDC2626),
+      surface: Color(0xFFFFFFFF),
+      onPrimary: Colors.white,
+      onSecondary: Colors.white,
+      onSurface: Color(0xFF111827),
+      onError: Colors.white,
+    ),
+    extensions: [lightExtension],
+    fontFamilyFallback: const ['Yu Gothic', 'Meiryo', 'Noto Sans JP'],
+    useMaterial3: true,
+  );
+
+  static final ThemeData darkTheme = ThemeData(
+    brightness: Brightness.dark,
+    scaffoldBackgroundColor: const Color(0xFF0B1020),
+    colorScheme: const ColorScheme.dark(
+      primary: Color(0xFF7C6CFF),
+      secondary: Color(0xFF60A5FA),
+      error: Color(0xFFF87171),
+      surface: Color(0xFF1E293B),
+      onPrimary: Colors.white,
+      onSecondary: Colors.white,
+      onSurface: Color(0xFFF8FAFC),
+      onError: Colors.white,
+    ),
+    extensions: [darkExtension],
+    fontFamilyFallback: const ['Yu Gothic', 'Meiryo', 'Noto Sans JP'],
+    useMaterial3: true,
+  );
+}
+
+class ColorConstants {
+  // Keep streak colors as they are
   static const streakColorDefault = Color.fromARGB(255, 59, 59, 59);
   static const streakColor3Days = Color(0xFFFF8A65);
   static const streakColor10Days = Color(0xFFFF9800);
@@ -15,33 +153,4 @@ class ColorConstants {
   static const streakColor200Days = Color(0xFF651FFF);
   static const streakColor365Days = Color(0xFF0509FF);
   static const streakColor500Days = Color(0xFF0AFFEB);
-
-  // Primary colors (fallback when theme is not directly used)
-  static const primary = Colors.deepPurple;
-  static final primaryLight = Colors.deepPurple.shade50;
-
-  // General Text Colors
-  static const textPrimary = Colors.black87;
-  static const textSecondary = Colors.black54;
-  static const textWhite = Colors.white;
-  static const textGrey = Colors.grey;
-
-  // UI Colors
-  static const error = Colors.red;
-  static final errorMedium = Colors.red.shade400;
-
-  static const success = Colors.green;
-  static final successLight = Colors.green.shade50;
-  static final successMedium = Colors.green.shade400;
-  static final successDark = Colors.green.shade900;
-
-  static const backgroundWhite = Colors.white;
-  static final backgroundGrey = Colors.grey.shade200;
-
-  static final borderGrey = Colors.grey.shade300;
-  
-  static const iconGrey = Colors.grey;
-  static const iconBlue = Colors.blue;
-  
-  static const buttonDisabled = Colors.grey;
 }

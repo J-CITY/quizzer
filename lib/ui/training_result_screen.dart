@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/word.dart';
-import '../utils/constants.dart';
 import 'training_screen.dart'; // for ttsProvider
 
 class TrainingResultScreen extends ConsumerWidget {
@@ -46,7 +45,7 @@ class TrainingResultScreen extends ConsumerWidget {
                     child: ListTile(
                       title: Text(
                         word.japanese,
-                        style: TextStyle(fontSize: 18, color: ColorConstants.error),
+                        style: TextStyle(fontSize: 18, color: Theme.of(context).colorScheme.error),
                       ),
                       subtitle: Text(
                         '${word.reading != null ? "${word.reading}\n" : ""}${word.translation}',
@@ -70,7 +69,7 @@ class TrainingResultScreen extends ConsumerWidget {
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
-                  foregroundColor: ColorConstants.textWhite,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.all(16),
                 ),
                 onPressed: () {

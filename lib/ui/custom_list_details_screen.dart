@@ -35,8 +35,9 @@ class _CustomListDetailsScreenState
 
   Future<void> _sync() async {
     if (widget.customList.googleSheetId == null ||
-        widget.customList.googleSheetId!.isEmpty)
+        widget.customList.googleSheetId!.isEmpty) {
       return;
+    }
 
     setState(() => _isSyncing = true);
     try {
@@ -86,6 +87,8 @@ class _CustomListDetailsScreenState
       widget.customList.words.removeAll(wordsToRemove);
       await widget.customList.words.save();
     });
+
+    await db.cleanUpOrphanedWords();
 
     setState(() {
       _mode = _ListMode.normal;
@@ -190,7 +193,7 @@ class _CustomListDetailsScreenState
                       },
                       child: Text(
                         word.japanese,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
                         ),
@@ -215,20 +218,20 @@ class _CustomListDetailsScreenState
                 const SizedBox(height: 8),
                 Text(
                   AppLocalizations.of(context)!.wordReading(word.reading!),
-                  style: const TextStyle(fontSize: 18, color: ColorConstants.textGrey),
+                  style: TextStyle(fontSize: 18, color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary),
                 ),
               ],
               const SizedBox(height: 16),
               Text(
                 AppLocalizations.of(context)!.wordTranslation(word.translation),
-                style: const TextStyle(fontSize: 20),
+                style: TextStyle(fontSize: 20),
               ),
               const SizedBox(height: 24),
               Text(
                 AppLocalizations.of(
                   context,
                 )!.wordProgress(word.progress.toString()),
-                style: const TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16),
               ),
               const SizedBox(height: 8),
               Text(
@@ -237,7 +240,7 @@ class _CustomListDetailsScreenState
                       ? '${word.lastTrained!.day.toString().padLeft(2, '0')}.${word.lastTrained!.month.toString().padLeft(2, '0')}.${word.lastTrained!.year}'
                       : AppLocalizations.of(context)!.never,
                 ),
-                style: const TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -301,12 +304,12 @@ class _CustomListDetailsScreenState
                       ),
                     );
                   },
-                  icon: const Icon(Icons.school),
+                  icon: Icon(Icons.school),
                   label: const Text('Учить', style: TextStyle(fontSize: 18)),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     backgroundColor: primaryColor,
-                    foregroundColor: ColorConstants.textWhite,
+                    foregroundColor: Colors.white,
                   ),
                 ),
               if (hasUnlearned) const SizedBox(height: 12),
@@ -323,14 +326,14 @@ class _CustomListDetailsScreenState
                     ),
                   );
                 },
-                icon: const Icon(Icons.repeat),
+                icon: Icon(Icons.repeat),
                 label: const Text('Повторить', style: TextStyle(fontSize: 18)),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: hasUnlearned
-                      ? ColorConstants.primaryLight
+                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
                       : primaryColor,
-                  foregroundColor: hasUnlearned ? primaryColor : ColorConstants.textWhite,
+                  foregroundColor: hasUnlearned ? primaryColor : Colors.white,
                   elevation: hasUnlearned ? 0 : null,
                 ),
               ),
@@ -362,7 +365,7 @@ class _CustomListDetailsScreenState
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   )
-                : IconButton(icon: const Icon(Icons.sync), onPressed: _sync),
+                : IconButton(icon: Icon(Icons.sync), onPressed: _sync),
           if (_mode == _ListMode.normal)
             PopupMenuButton<String>(
               onSelected: (val) {
@@ -398,7 +401,7 @@ class _CustomListDetailsScreenState
             ),
           if (_mode != _ListMode.normal)
             IconButton(
-              icon: const Icon(Icons.close),
+              icon: Icon(Icons.close),
               onPressed: () => setState(() {
                 _mode = _ListMode.normal;
                 _selectedWordIds.clear();
@@ -420,8 +423,8 @@ class _CustomListDetailsScreenState
                     vertical: 4,
                   ),
                   color: _selectedWordIds.contains(word.id)
-                      ? ColorConstants.primaryLight
-                      : (isLearned ? ColorConstants.successLight : null),
+                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                      : (isLearned ? Theme.of(context).extension<AppColorsExtension>()!.successBackground : null),
                   child: ListTile(
                     leading: _mode != _ListMode.normal
                         ? Checkbox(
@@ -442,7 +445,7 @@ class _CustomListDetailsScreenState
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: isLearned ? ColorConstants.successDark : null,
+                        color: isLearned ? Theme.of(context).extension<AppColorsExtension>()!.successText : null,
                       ),
                     ),
                     subtitle: Text(word.translation),
@@ -455,15 +458,15 @@ class _CustomListDetailsScreenState
                                 height: 24,
                                 child: CircularProgressIndicator(
                                   value: word.progress / 5,
-                                  backgroundColor: ColorConstants.backgroundGrey,
-                                  color: isLearned ? ColorConstants.success : ColorConstants.iconBlue,
+                                  backgroundColor: Theme.of(context).colorScheme.surface,
+                                  color: isLearned ? Theme.of(context).extension<AppColorsExtension>()!.success : Theme.of(context).extension<AppColorsExtension>()!.iconBlue,
                                   strokeWidth: 3,
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Checkbox(
                                 value: isLearned,
-                                activeColor: ColorConstants.success,
+                                activeColor: Theme.of(context).extension<AppColorsExtension>()!.success,
                                 onChanged: (val) async {
                                   if (val != null) {
                                     await ref
@@ -505,8 +508,8 @@ class _CustomListDetailsScreenState
           ? FloatingActionButton(
               onPressed: _startTraining,
               backgroundColor: primaryColor,
-              foregroundColor: ColorConstants.textWhite,
-              child: const Icon(Icons.play_arrow, size: 32),
+              foregroundColor: Colors.white,
+              child: Icon(Icons.play_arrow, size: 32),
             )
           : FloatingActionButton.extended(
               onPressed: _selectedWordIds.isEmpty
@@ -525,9 +528,9 @@ class _CustomListDetailsScreenState
                 _mode == _ListMode.selectToDelete ? Icons.delete : Icons.add,
               ),
               backgroundColor: _selectedWordIds.isEmpty
-                  ? ColorConstants.textGrey
+                  ? Theme.of(context).extension<AppColorsExtension>()!.textSecondary
                   : primaryColor,
-              foregroundColor: ColorConstants.textWhite,
+              foregroundColor: Colors.white,
             ),
     );
   }

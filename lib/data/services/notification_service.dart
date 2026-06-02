@@ -9,50 +9,90 @@ void callbackDispatcher() {
     await db.init();
     final settings = await db.getSettings();
 
-    if (!settings.notificationsEnabled) return Future.value(true);
+    if (!settings.notificationsEnabled && !settings.streakNotificationsEnabled) {
+      return Future.value(true);
+    }
 
     final now = DateTime.now();
     final currentMinutes = now.hour * 60 + now.minute;
 
-    final startParts = settings.notificationTimeStart.split(':');
-    final startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+    final fln = FlutterLocalNotificationsPlugin();
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initSettings = InitializationSettings(android: androidInit);
+    await fln.initialize(settings: initSettings);
 
-    final endParts = settings.notificationTimeEnd.split(':');
-    final endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+    // Логика обычных уведомлений
+    if (settings.notificationsEnabled) {
+      final startParts = settings.notificationTimeStart.split(':');
+      final startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
 
-    bool isInWindow = false;
-    if (startMinutes <= endMinutes) {
-      isInWindow = currentMinutes >= startMinutes && currentMinutes <= endMinutes;
-    } else {
-      isInWindow = currentMinutes >= startMinutes || currentMinutes <= endMinutes;
+      final endParts = settings.notificationTimeEnd.split(':');
+      final endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+
+      bool isInWindow = false;
+      if (startMinutes <= endMinutes) {
+        isInWindow = currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+      } else {
+        isInWindow = currentMinutes >= startMinutes || currentMinutes <= endMinutes;
+      }
+
+      if (isInWindow) {
+        final words = await db.getAllWords();
+        final wordsToRepeat = words.where((w) => w.progress < 5).length;
+
+        if (wordsToRepeat > 0) {
+          const androidDetails = AndroidNotificationDetails(
+            'quizzer_channel',
+            'Quizzer Notifications',
+            channelDescription: 'Reminders to repeat words',
+            importance: Importance.max,
+            priority: Priority.high,
+          );
+          const details = NotificationDetails(android: androidDetails);
+
+          await fln.show(
+            id: 0,
+            title: 'Время тренировки!',
+            body: 'У вас $wordsToRepeat слов для повторения.',
+            notificationDetails: details,
+          );
+        }
+      }
     }
 
-    if (!isInWindow) return Future.value(true);
+    // Логика уведомлений о стрике
+    if (settings.streakNotificationsEnabled) {
+      // Показывать между 21:00 и 21:59
+      if (now.hour == 21) {
+        final sessions = await db.getAllTrainingSessions();
+        final uniqueDays = sessions.map((s) => s.date).toSet().toList();
+        uniqueDays.sort((a, b) => b.compareTo(a));
 
-    final words = await db.getAllWords();
-    final wordsToRepeat = words.where((w) => w.progress < 5).length;
+        final today = DateTime(now.year, now.month, now.day);
+        final yesterday = today.subtract(const Duration(days: 1));
 
-    if (wordsToRepeat > 0) {
-      final fln = FlutterLocalNotificationsPlugin();
-      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-      const initSettings = InitializationSettings(android: androidInit);
-      await fln.initialize(settings: initSettings);
+        bool trainedToday = uniqueDays.isNotEmpty && uniqueDays.first == today;
+        bool trainedYesterday = uniqueDays.contains(yesterday);
 
-      const androidDetails = AndroidNotificationDetails(
-        'quizzer_channel',
-        'Quizzer Notifications',
-        channelDescription: 'Reminders to repeat words',
-        importance: Importance.max,
-        priority: Priority.high,
-      );
-      const details = NotificationDetails(android: androidDetails);
+        // Если вчера тренировались, а сегодня еще нет - стрик под угрозой
+        if (!trainedToday && trainedYesterday) {
+          const androidDetailsStreak = AndroidNotificationDetails(
+            'quizzer_streak_channel',
+            'Quizzer Streak',
+            channelDescription: 'Reminders to keep your streak',
+            importance: Importance.max,
+            priority: Priority.high,
+          );
+          const detailsStreak = NotificationDetails(android: androidDetailsStreak);
 
-      await fln.show(
-        id: 0,
-        title: 'Время тренировки!',
-        body: 'У вас $wordsToRepeat слов для повторения.',
-        notificationDetails: details,
-      );
+          await fln.show(
+            id: 1,
+            title: '🔥 Ваш стрик может сгореть!',
+            body: 'Вы еще не тренировались сегодня. Зайдите в приложение, чтобы не потерять прогресс!',
+            notificationDetails: detailsStreak,
+          );
+        }
+      }
     }
 
     return Future.value(true);
@@ -80,5 +120,13 @@ class NotificationService {
 
   static Future<void> cancelSchedule() async {
     await Workmanager().cancelByUniqueName('quizzer_notification');
+  }
+
+  static Future<void> requestPermissions() async {
+    final fln = FlutterLocalNotificationsPlugin();
+    await fln
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
   }
 }

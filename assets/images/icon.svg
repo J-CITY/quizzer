@@ -1,0 +1,36 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Градиент для верхней (синей) карточки -->
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#557AF5"/>
+      <stop offset="100%" stop-color="#4C48F5"/>
+    </linearGradient>
+
+    <!-- Градиент для нижней (бирюзовой) карточки -->
+    <linearGradient id="tealGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5BDEBA"/>
+      <stop offset="100%" stop-color="#36C2AC"/>
+    </linearGradient>
+
+    <!-- Тень для верхней карточки -->
+    <filter id="shadowTop" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.12"/>
+    </filter>
+
+    <!-- Тень для нижней карточки -->
+    <filter id="shadowBottom" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Бирюзовая карточка (на заднем плане) -->
+  <g transform="translate(140, 150) rotate(12)">
+    <rect x="-65" y="-55" width="130" height="110" rx="20" fill="url(#tealGradient)" filter="url(#shadowBottom)"/>
+  </g>
+
+  <!-- Синяя карточка (на переднем плане) -->
+  <g transform="translate(116, 105) rotate(-10)">
+    <rect x="-75" y="-60" width="150" height="120" rx="20" fill="url(#blueGradient)" filter="url(#shadowTop)"/>
+    <text x="0" y="12" font-family="'Google Sans', Roboto, 'Segoe UI', sans-serif" font-weight="600" font-size="34" fill="#FFFFFF" text-anchor="middle">Hello</text>
+  </g>
+</svg>

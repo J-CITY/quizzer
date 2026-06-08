@@ -9,7 +9,9 @@ final googleSheetsServiceProvider = Provider<GoogleSheetsService>((ref) {
 });
 
 class GoogleSheetsService {
-  static Future<Map<String, String>?> fetchSheetNameAndLanguage(String sheetId) async {
+  static Future<Map<String, String>?> fetchSheetNameAndLanguage(
+    String sheetId,
+  ) async {
     try {
       final url = Uri.parse(
         'https://docs.google.com/spreadsheets/d/$sheetId/htmlview',
@@ -28,7 +30,7 @@ class GoogleSheetsService {
           if (title.isEmpty) {
             return {'name': 'Google Sheet'};
           }
-          
+
           String? language;
           // Parse language from brackets, e.g., [en-US]
           final langRegex = RegExp(r'\[([a-zA-Z]{2}-[a-zA-Z]{2})\]');
@@ -38,17 +40,17 @@ class GoogleSheetsService {
             title = title.replaceFirst(langMatch.group(0)!, '').trim();
           }
 
-          return {
-            'name': title,
-            if (language != null) 'language': language,
-          };
+          return {'name': title, if (language != null) 'language': language};
         }
       }
     } catch (_) {}
     return null;
   }
 
-  static Future<List<Word>> fetchWords(String sheetId, {String? sheetName}) async {
+  static Future<List<Word>> fetchWords(
+    String sheetId, {
+    String? sheetName,
+  }) async {
     Uri url;
     if (sheetName != null && sheetName.trim().isNotEmpty) {
       url = Uri.parse(
@@ -97,6 +99,13 @@ class GoogleSheetsService {
             final readingStr = row[2].toString().trim();
             word.reading = readingStr.isEmpty ? null : readingStr;
             word.translation = row[3].toString().trim();
+          }
+
+          if (row.length >= 5) {
+            final imgStr = row[4].toString().trim();
+            if (imgStr.isNotEmpty) {
+              word.imageUrl = imgStr;
+            }
           }
 
           words.add(word);

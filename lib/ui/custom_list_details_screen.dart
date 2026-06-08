@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quizzer/data/models/word.dart';
@@ -8,6 +9,9 @@ import '../data/services/database_service.dart';
 import '../data/services/google_sheets_service.dart';
 import 'training_screen.dart';
 import '../utils/constants.dart';
+import 'widgets/acrylic_card.dart';
+import 'widgets/glow_button.dart';
+import 'widgets/progress_bar.dart';
 
 class CustomListDetailsScreen extends ConsumerStatefulWidget {
   final CustomList customList;
@@ -26,6 +30,14 @@ class _CustomListDetailsScreenState
   _ListMode _mode = _ListMode.normal;
   final Set<int> _selectedWordIds = {};
   bool _isSyncing = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -111,7 +123,7 @@ class _CustomListDetailsScreenState
     if (localLists.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Нет доступных локальных списков')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.noLocalLists)),
         );
       }
       return;
@@ -157,7 +169,7 @@ class _CustomListDetailsScreenState
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Слова добавлены')));
+        ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.wordsAdded)));
       }
     }
   }
@@ -165,17 +177,33 @@ class _CustomListDetailsScreenState
   void _showWordDetails(Word word) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
         final primaryColor = Theme.of(context).colorScheme.primary;
-        return Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
+        return SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (word.imageUrl != null && word.imageUrl!.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    word.imageUrl!,
+                    width: double.infinity,
+                    height: 200,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Center(child: Icon(Icons.broken_image, size: 48, color: Colors.grey)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -245,14 +273,15 @@ class _CustomListDetailsScreenState
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+                child: GlowButton(
                   onPressed: () => Navigator.pop(context),
+                  width: double.infinity,
                   child: Text(AppLocalizations.of(context)!.close),
                 ),
               ),
             ],
           ),
-        );
+        ));
       },
     );
   }
@@ -283,37 +312,42 @@ class _CustomListDetailsScreenState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (!hasUnlearned) ...[
-                const Text(
-                  'Все слова изучены 🎉',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                Text(
+                  AppLocalizations.of(context)!.allWordsLearned,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
               ],
-              if (hasUnlearned)
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => TrainingScreen(
-                          customListId: widget.customList.id,
-                          isReviewMode: false,
-                        ),
+              GlowButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TrainingScreen(
+                        customListId: widget.customList.id,
+                        isReviewMode: false,
                       ),
-                    );
-                  },
-                  icon: Icon(Icons.school),
-                  label: const Text('Учить', style: TextStyle(fontSize: 18)),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                  ),
+                    ),
+                  );
+                },
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.school),
+                    const SizedBox(width: 8),
+                    Text(
+                      hasUnlearned
+                          ? AppLocalizations.of(context)!.learnBtn
+                          : AppLocalizations.of(context)!.reviewBtn,
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  ],
                 ),
-              if (hasUnlearned) const SizedBox(height: 12),
-              ElevatedButton.icon(
+              ),
+              const SizedBox(height: 12),
+              GlowButton(
                 onPressed: () {
                   Navigator.pop(context);
                   Navigator.push(
@@ -326,15 +360,14 @@ class _CustomListDetailsScreenState
                     ),
                   );
                 },
-                icon: Icon(Icons.repeat),
-                label: const Text('Повторить', style: TextStyle(fontSize: 18)),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: hasUnlearned
-                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                      : primaryColor,
-                  foregroundColor: hasUnlearned ? primaryColor : Colors.white,
-                  elevation: hasUnlearned ? 0 : null,
+                isPrimary: false,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.repeat),
+                    const SizedBox(width: 8),
+                    Text(AppLocalizations.of(context)!.reviewBtn, style: const TextStyle(fontSize: 18)),
+                  ],
                 ),
               ),
             ],
@@ -353,6 +386,14 @@ class _CustomListDetailsScreenState
     final primaryColor = Theme.of(context).colorScheme.primary;
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.surface.withOpacity(0.5),
+        elevation: 0,
+        flexibleSpace: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(color: Colors.transparent),
+          ),
+        ),
         title: Text(widget.customList.name),
         actions: [
           if (_mode == _ListMode.normal && isGoogleSheetList)
@@ -393,9 +434,9 @@ class _CustomListDetailsScreenState
                   value: 'add_to_other',
                   child: Text(AppLocalizations.of(context)!.addToAnotherList),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'reset',
-                  child: Text('Сбросить прогресс'),
+                  child: Text(AppLocalizations.of(context)!.resetProgress),
                 ),
               ],
             ),
@@ -409,19 +450,63 @@ class _CustomListDetailsScreenState
             ),
         ],
       ),
-      body: words.isEmpty
-          ? Center(child: Text(AppLocalizations.of(context)!.listEmpty))
-          : ListView.builder(
-              itemCount: words.length,
-              itemBuilder: (context, index) {
-                final word = words[index];
-                final isLearned = word.progress >= 5;
+      body: Column(
+        children: [
+          ThinProgressBar(
+            total: words.length,
+            learned: words.where((w) => w.progress >= 5).length,
+            inProgress: words.where((w) => w.progress > 0 && w.progress < 5).length,
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: AppLocalizations.of(context)!.searchWords,
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                          });
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surface,
+              ),
+              onChanged: (val) {
+                setState(() {
+                  _searchQuery = val;
+                });
+              },
+            ),
+          ),
+          Expanded(
+            child: () {
+              final filteredWords = words.where((w) {
+                final q = _searchQuery.toLowerCase();
+                return w.japanese.toLowerCase().contains(q) || w.translation.toLowerCase().contains(q);
+              }).toList();
+              
+              if (filteredWords.isEmpty) {
+                return Center(child: Text(AppLocalizations.of(context)!.listEmpty));
+              }
+              
+              return ListView.builder(
+                itemCount: filteredWords.length,
+                itemBuilder: (context, index) {
+                  final word = filteredWords[index];
+                  final isLearned = word.progress >= 5;
 
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
+                return AcrylicCard(
                   color: _selectedWordIds.contains(word.id)
                       ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
                       : (isLearned ? Theme.of(context).extension<AppColorsExtension>()!.successBackground : null),
@@ -503,15 +588,21 @@ class _CustomListDetailsScreenState
                   ),
                 );
               },
-            ),
+            );
+          }(),
+        ),
+      ],
+    ),
       floatingActionButton: _mode == _ListMode.normal
-          ? FloatingActionButton(
+          ? GlowButton(
+              padding: const EdgeInsets.all(16),
+              borderRadius: 30,
               onPressed: _startTraining,
-              backgroundColor: primaryColor,
-              foregroundColor: Colors.white,
-              child: Icon(Icons.play_arrow, size: 32),
+              child: const Icon(Icons.play_arrow, size: 32),
             )
-          : FloatingActionButton.extended(
+          : GlowButton(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              borderRadius: 30,
               onPressed: _selectedWordIds.isEmpty
                   ? null
                   : () {
@@ -521,16 +612,20 @@ class _CustomListDetailsScreenState
                         _addSelectedToAnotherList();
                       }
                     },
-              label: Text(
-                _mode == _ListMode.selectToDelete ? 'Удалить' : 'Добавить',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _mode == _ListMode.selectToDelete ? Icons.delete : Icons.add,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _mode == _ListMode.selectToDelete
+                        ? AppLocalizations.of(context)!.deleteBtn
+                        : AppLocalizations.of(context)!.addBtn,
+                  ),
+                ],
               ),
-              icon: Icon(
-                _mode == _ListMode.selectToDelete ? Icons.delete : Icons.add,
-              ),
-              backgroundColor: _selectedWordIds.isEmpty
-                  ? Theme.of(context).extension<AppColorsExtension>()!.textSecondary
-                  : primaryColor,
-              foregroundColor: Colors.white,
             ),
     );
   }

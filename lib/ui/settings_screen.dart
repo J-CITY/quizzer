@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/services/database_service.dart';
 import '../data/models/settings.dart' as app;
 import '../data/services/google_sheets_service.dart';
 import '../data/services/notification_service.dart';
+import '../utils/constants.dart';
+import '../ui/widgets/settings_group.dart';
+import '../ui/widgets/settings_tile.dart';
 
 final settingsProvider = FutureProvider.autoDispose<app.Settings>((ref) async {
   return ref.watch(databaseServiceProvider).getSettings();
@@ -69,428 +73,469 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         !settings.questionVoiceToWordInput &&
         !settings.questionVoiceToWordConstructor &&
         !settings.questionTranslateToWordInput &&
-        !settings.questionTranslateToWordConstructor) {
+        !settings.questionTranslateToWordConstructor &&
+        !settings.questionImageToWord) {
       settings.questionWordToTranslate = true;
+    }
+  }
+
+  Future<void> _showNumberDialog(String title, int initialValue, Function(int) onSave) async {
+    final controller = TextEditingController(text: initialValue.toString());
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(AppLocalizations.of(context)!.cancel),
+          ),
+          TextButton(
+            onPressed: () {
+              final val = int.tryParse(controller.text);
+              if (val != null) {
+                onSave(val);
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showQuestionTypesDialog(app.Settings settings) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).cardColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateBottomSheet) {
+            Widget buildCheck(String title, bool value, Function(bool) onChanged) {
+              return CheckboxListTile(
+                title: Text(title),
+                value: value,
+                onChanged: (val) {
+                  if (val != null) {
+                    setStateBottomSheet(() {
+                      onChanged(val);
+                    });
+                    _updateSettings(settings, () {
+                      onChanged(val);
+                      _ensureOneQuestionType(settings);
+                    });
+                  }
+                },
+              );
+            }
+            return DraggableScrollableSheet(
+              initialChildSize: 0.8,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Text(
+                      AppLocalizations.of(context)!.questionTypes,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 16),
+                    buildCheck(AppLocalizations.of(context)!.questionWordToTranslate, settings.questionWordToTranslate, (v) => settings.questionWordToTranslate = v),
+                    buildCheck(AppLocalizations.of(context)!.questionTranslateToWord, settings.questionTranslateToWord, (v) => settings.questionTranslateToWord = v),
+                    buildCheck(AppLocalizations.of(context)!.questionWordToReading, settings.questionWordToReading, (v) => settings.questionWordToReading = v),
+                    buildCheck(AppLocalizations.of(context)!.questionReadingToWord, settings.questionReadingToWord, (v) => settings.questionReadingToWord = v),
+                    buildCheck(AppLocalizations.of(context)!.questionVoiceToTranslate, settings.questionVoiceToTranslate, (v) => settings.questionVoiceToTranslate = v),
+                    buildCheck(AppLocalizations.of(context)!.questionVoiceToWord, settings.questionVoiceToWord, (v) => settings.questionVoiceToWord = v),
+                    buildCheck(AppLocalizations.of(context)!.questionVoiceToWordInput, settings.questionVoiceToWordInput, (v) => settings.questionVoiceToWordInput = v),
+                    buildCheck(AppLocalizations.of(context)!.questionVoiceToWordConstructor, settings.questionVoiceToWordConstructor, (v) => settings.questionVoiceToWordConstructor = v),
+                    buildCheck(AppLocalizations.of(context)!.questionTranslateToWordInput, settings.questionTranslateToWordInput, (v) => settings.questionTranslateToWordInput = v),
+                    buildCheck(AppLocalizations.of(context)!.questionTranslateToWordConstructor, settings.questionTranslateToWordConstructor, (v) => settings.questionTranslateToWordConstructor = v),
+                    buildCheck(AppLocalizations.of(context)!.questionImageToWord, settings.questionImageToWord, (v) => settings.questionImageToWord = v),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _getFrequencyText(int minutes) {
+    switch (minutes) {
+      case 30: return AppLocalizations.of(context)!.freq30m;
+      case 60: return AppLocalizations.of(context)!.freq1h;
+      case 90: return AppLocalizations.of(context)!.freq1_5h;
+      case 120: return AppLocalizations.of(context)!.freq2h;
+      case 180: return AppLocalizations.of(context)!.freq3h;
+      case 360: return AppLocalizations.of(context)!.freq6h;
+      case 1440: return AppLocalizations.of(context)!.freq1d;
+      default: return '$minutes мин';
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final settingsAsync = ref.watch(settingsProvider);
+    final accentColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       appBar: AppBar(title: Text(AppLocalizations.of(context)!.settingsTitle)),
       body: settingsAsync.when(
         data: (settings) {
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             children: [
-              TextFormField(
-                key: ValueKey('qc_${settings.questionsCount}'),
-                initialValue: settings.questionsCount.toString(),
-                decoration: InputDecoration(
-                  labelText: AppLocalizations.of(
-                    context,
-                  )!.settingsQuestionsCount,
-                ),
-                keyboardType: TextInputType.number,
-                onFieldSubmitted: (val) {
-                  _updateSettings(settings, () {
-                    int newCount = int.tryParse(val) ?? 50;
-                    if (newCount < 1) newCount = 1;
-                    if (newCount > settings.learningQueueSize) {
-                      settings.learningQueueSize = newCount;
-                    }
-                    settings.questionsCount = newCount;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                key: ValueKey('lqs_${settings.learningQueueSize}'),
-                initialValue: settings.learningQueueSize.toString(),
-                decoration: InputDecoration(
-                  labelText: AppLocalizations.of(
-                    context,
-                  )!.settingsLearningQueueSize,
-                ),
-                keyboardType: TextInputType.number,
-                onFieldSubmitted: (val) {
-                  _updateSettings(settings, () {
-                    int newSize = int.tryParse(val) ?? 50;
-                    if (newSize < settings.questionsCount) {
-                      newSize = settings.questionsCount;
-                    }
-                    settings.learningQueueSize = newSize;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              SwitchListTile(
-                title: Text(
-                  AppLocalizations.of(context)!.settingsNotifications,
-                ),
-                subtitle: Text(
-                  AppLocalizations.of(context)!.settingsNotificationsDesc,
-                ),
-                value: settings.notificationsEnabled,
-                onChanged: (val) {
-                  _updateSettings(settings, () {
-                    settings.notificationsEnabled = val;
-                  });
-                  if (val) {
-                    NotificationService.updateSchedule(
-                      settings.notificationIntervalMinutes,
-                    );
-                  } else {
-                    if (!settings.streakNotificationsEnabled) {
-                      NotificationService.cancelSchedule();
-                    }
-                  }
-                },
-              ),
-              SwitchListTile(
-                title: const Text('Уведомления об утере стрика'),
-                subtitle: const Text('Напоминание около 21:00, если вы еще не тренировались сегодня'),
-                value: settings.streakNotificationsEnabled,
-                onChanged: (val) {
-                  _updateSettings(settings, () {
-                    settings.streakNotificationsEnabled = val;
-                  });
-                  if (val || settings.notificationsEnabled) {
-                    NotificationService.updateSchedule(
-                      settings.notificationIntervalMinutes,
-                    );
-                  } else {
-                    NotificationService.cancelSchedule();
-                  }
-                },
-              ),
-              if (settings.notificationsEnabled) ...[
-                ListTile(
-                  title: Text(
-                    AppLocalizations.of(context)!.notificationFrequency,
-                  ),
-                  trailing: DropdownButton<int>(
-                    value:
-                        [
-                          30,
-                          60,
-                          90,
-                          120,
-                          180,
-                          360,
-                          1440,
-                        ].contains(settings.notificationIntervalMinutes)
-                        ? settings.notificationIntervalMinutes
-                        : 60,
-                    items: [
-                      DropdownMenuItem<int>(
-                        value: 30,
-                        child: Text(AppLocalizations.of(context)!.freq30m),
-                      ),
-                      DropdownMenuItem<int>(
-                        value: 60,
-                        child: Text(AppLocalizations.of(context)!.freq1h),
-                      ),
-                      DropdownMenuItem<int>(
-                        value: 90,
-                        child: Text(AppLocalizations.of(context)!.freq1_5h),
-                      ),
-                      DropdownMenuItem<int>(
-                        value: 120,
-                        child: Text(AppLocalizations.of(context)!.freq2h),
-                      ),
-                      DropdownMenuItem<int>(
-                        value: 180,
-                        child: Text(AppLocalizations.of(context)!.freq3h),
-                      ),
-                      DropdownMenuItem<int>(
-                        value: 360,
-                        child: Text(AppLocalizations.of(context)!.freq6h),
-                      ),
-                      DropdownMenuItem<int>(
-                        value: 1440,
-                        child: Text(AppLocalizations.of(context)!.freq1d),
-                      ),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        _updateSettings(settings, () {
-                          settings.notificationIntervalMinutes = val;
-                        });
-                        NotificationService.updateSchedule(val);
-                      }
-                    },
-                  ),
-                ),
-                ListTile(
-                  title: Text(
-                    AppLocalizations.of(context)!.notificationTimeWindow,
-                  ),
-                  subtitle: Text(
-                    '${settings.notificationTimeStart} - ${settings.notificationTimeEnd}',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      OutlinedButton(
-                        onPressed: () => _pickTime(context, settings, true),
-                        child: Text(
-                          AppLocalizations.of(
-                            context,
-                          )!.timeStart(settings.notificationTimeStart),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton(
-                        onPressed: () => _pickTime(context, settings, false),
-                        child: Text(
-                          AppLocalizations.of(
-                            context,
-                          )!.timeEnd(settings.notificationTimeEnd),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              SwitchListTile(
-                title: Text(AppLocalizations.of(context)!.settingsAutoTts),
-                subtitle: Text(
-                  AppLocalizations.of(context)!.settingsAutoTtsDesc,
-                ),
-                value: settings.autoPlayVoice,
-                onChanged: (val) {
-                  _updateSettings(settings, () {
-                    settings.autoPlayVoice = val;
-                  });
-                },
-              ),
-              SwitchListTile(
-                title: Text(AppLocalizations.of(context)!.settingsSoundEffects),
-                subtitle: Text(
-                  AppLocalizations.of(context)!.settingsSoundEffectsDesc,
-                ),
-                value: settings.playSoundEffects,
-                onChanged: (val) {
-                  _updateSettings(settings, () {
-                    settings.playSoundEffects = val;
-                  });
-                },
-              ),
-              SwitchListTile(
-                title: Text(AppLocalizations.of(context)!.settingsAutoAdvance),
-                subtitle: Text(
-                  AppLocalizations.of(context)!.settingsAutoAdvanceDesc,
-                ),
-                value: settings.autoAdvanceToNextQuestion,
-                onChanged: (val) {
-                  _updateSettings(settings, () {
-                    settings.autoAdvanceToNextQuestion = val;
-                  });
-                },
-              ),
-              const Divider(),
-              SwitchListTile(
-                title: Text(AppLocalizations.of(context)!.settingsSimilarWords),
-                subtitle: Text(AppLocalizations.of(context)!.settingsSimilarWordsDesc),
-                value: settings.useSimilarWordsForOptions,
-                onChanged: (val) {
-                  _updateSettings(settings, () {
-                    settings.useSimilarWordsForOptions = val;
-                  });
-                },
-              ),
-              SwitchListTile(
-                title: Text(AppLocalizations.of(context)!.settingsSpoilWords),
-                subtitle: Text(AppLocalizations.of(context)!.settingsSpoilWordsDesc),
-                value: settings.useSpoiledWordsForOptions,
-                onChanged: (val) {
-                  _updateSettings(settings, () {
-                    settings.useSpoiledWordsForOptions = val;
-                  });
-                },
-              ),
-              ListTile(
-                title: TextFormField(
-                  initialValue: settings.confusableCharactersSheetId ?? '',
-                  decoration: InputDecoration(
-                    labelText: AppLocalizations.of(context)!.settingsConfusableSheet,
-                  ),
-                  onChanged: (val) {
-                    settings.confusableCharactersSheetId = val;
-                  },
-                  onFieldSubmitted: (val) {
-                    _updateSettings(settings, () {
-                      settings.confusableCharactersSheetId = val;
-                    });
-                  },
-                ),
-                trailing: IconButton(
-                  icon: Icon(Icons.sync),
-                  tooltip: AppLocalizations.of(context)!.settingsSyncConfusable,
-                  onPressed: () async {
-                    if (settings.confusableCharactersSheetId == null || settings.confusableCharactersSheetId!.isEmpty) return;
-                    try {
-                      // Save it first just in case
-                      await _updateSettings(settings, () {});
-                      final groups = await GoogleSheetsService.fetchConfusableGroups(settings.confusableCharactersSheetId!);
-                      await _updateSettings(settings, () {
-                        settings.customConfusableGroups = groups;
-                      });
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(AppLocalizations.of(context)!.syncSuccess)),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e')),
-                        );
-                      }
-                    }
-                  },
-                ),
-              ),
-              const Divider(),
-              ExpansionTile(
-                title: Text(AppLocalizations.of(context)!.questionTypes),
+              SettingsGroup(
+                title: AppLocalizations.of(context)!.settingsGroupTraining,
                 children: [
-                  CheckboxListTile(
-                    title: Text(
-                      AppLocalizations.of(context)!.questionWordToTranslate,
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsQuestionsCount,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          settings.questionsCount.toString(),
+                          style: TextStyle(color: accentColor, fontSize: 16),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right, color: Colors.grey),
+                      ],
                     ),
-                    value: settings.questionWordToTranslate,
-                    onChanged: (val) {
-                      if (val != null) {
-                        _updateSettings(settings, () {
-                          settings.questionWordToTranslate = val;
-                          _ensureOneQuestionType(settings);
-                        });
-                      }
+                    onTap: () {
+                      _showNumberDialog(
+                        AppLocalizations.of(context)!.settingsQuestionsCount,
+                        settings.questionsCount,
+                        (val) {
+                          _updateSettings(settings, () {
+                            int newCount = val < 1 ? 1 : val;
+                            if (newCount > settings.learningQueueSize) {
+                              settings.learningQueueSize = newCount;
+                            }
+                            settings.questionsCount = newCount;
+                          });
+                        },
+                      );
                     },
                   ),
-                  CheckboxListTile(
-                    title: Text(
-                      AppLocalizations.of(context)!.questionTranslateToWord,
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsLearningQueueSize,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          settings.learningQueueSize.toString(),
+                          style: TextStyle(color: accentColor, fontSize: 16),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right, color: Colors.grey),
+                      ],
                     ),
-                    value: settings.questionTranslateToWord,
-                    onChanged: (val) {
-                      if (val != null) {
-                        _updateSettings(settings, () {
-                          settings.questionTranslateToWord = val;
-                          _ensureOneQuestionType(settings);
-                        });
-                      }
+                    onTap: () {
+                      _showNumberDialog(
+                        AppLocalizations.of(context)!.settingsLearningQueueSize,
+                        settings.learningQueueSize,
+                        (val) {
+                          _updateSettings(settings, () {
+                            int newSize = val < settings.questionsCount ? settings.questionsCount : val;
+                            settings.learningQueueSize = newSize;
+                          });
+                        },
+                      );
                     },
                   ),
-                  CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionWordToReading),
-                    value: settings.questionWordToReading,
-                    onChanged: (val) {
-                      if (val != null) {
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.questionTypes,
+                    showDivider: false,
+                    trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                    onTap: () => _showQuestionTypesDialog(settings),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SettingsGroup(
+                title: AppLocalizations.of(context)!.settingsGroupProcess,
+                children: [
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsAutoTts,
+                    subtitle: AppLocalizations.of(context)!.settingsAutoTtsDesc,
+                    trailing: Switch(
+                      value: settings.autoPlayVoice,
+                      onChanged: (val) {
                         _updateSettings(settings, () {
-                          settings.questionWordToReading = val;
-                          _ensureOneQuestionType(settings);
+                          settings.autoPlayVoice = val;
                         });
-                      }
+                      },
+                    ),
+                  ),
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsSoundEffects,
+                    subtitle: AppLocalizations.of(context)!.settingsSoundEffectsDesc,
+                    trailing: Switch(
+                      value: settings.playSoundEffects,
+                      onChanged: (val) {
+                        _updateSettings(settings, () {
+                          settings.playSoundEffects = val;
+                        });
+                      },
+                    ),
+                  ),
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsAutoAdvance,
+                    subtitle: AppLocalizations.of(context)!.settingsAutoAdvanceDesc,
+                    showDivider: false,
+                    trailing: Switch(
+                      value: settings.autoAdvanceToNextQuestion,
+                      onChanged: (val) {
+                        _updateSettings(settings, () {
+                          settings.autoAdvanceToNextQuestion = val;
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SettingsGroup(
+                title: AppLocalizations.of(context)!.settingsGroupDictionary,
+                children: [
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsSimilarWords,
+                    subtitle: AppLocalizations.of(context)!.settingsSimilarWordsDesc,
+                    trailing: Switch(
+                      value: settings.useSimilarWordsForOptions,
+                      onChanged: (val) {
+                        _updateSettings(settings, () {
+                          settings.useSimilarWordsForOptions = val;
+                        });
+                      },
+                    ),
+                  ),
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsSpoilWords,
+                    subtitle: AppLocalizations.of(context)!.settingsSpoilWordsDesc,
+                    trailing: Switch(
+                      value: settings.useSpoiledWordsForOptions,
+                      onChanged: (val) {
+                        _updateSettings(settings, () {
+                          settings.useSpoiledWordsForOptions = val;
+                        });
+                      },
+                    ),
+                  ),
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsConfusableSheet,
+                    subtitle: settings.confusableCharactersSheetId?.isEmpty ?? true ? AppLocalizations.of(context)!.notSet : settings.confusableCharactersSheetId,
+                    showDivider: false,
+                    trailing: IconButton(
+                      icon: const Icon(Icons.sync),
+                      onPressed: () async {
+                        if (settings.confusableCharactersSheetId == null || settings.confusableCharactersSheetId!.isEmpty) {
+                          // Allow editing if empty
+                          final controller = TextEditingController(text: settings.confusableCharactersSheetId);
+                          await showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: Text(AppLocalizations.of(context)!.settingsConfusableSheet),
+                              content: TextField(
+                                controller: controller,
+                                decoration: const InputDecoration(border: OutlineInputBorder()),
+                              ),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context)!.cancel)),
+                                TextButton(
+                                  onPressed: () {
+                                    _updateSettings(settings, () {
+                                      settings.confusableCharactersSheetId = controller.text;
+                                    });
+                                    Navigator.pop(context);
+                                  },
+                                  child: const Text('OK'),
+                                ),
+                              ],
+                            ),
+                          );
+                          return;
+                        }
+                        
+                        try {
+                          await _updateSettings(settings, () {});
+                          final groups = await GoogleSheetsService.fetchConfusableGroups(settings.confusableCharactersSheetId!);
+                          await _updateSettings(settings, () {
+                            settings.customConfusableGroups = groups;
+                          });
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.syncSuccess)));
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                          }
+                        }
+                      },
+                    ),
+                    onTap: () async {
+                      final controller = TextEditingController(text: settings.confusableCharactersSheetId);
+                      await showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: Text(AppLocalizations.of(context)!.settingsConfusableSheet),
+                          content: TextField(
+                            controller: controller,
+                            decoration: const InputDecoration(border: OutlineInputBorder()),
+                          ),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context)!.cancel)),
+                            TextButton(
+                              onPressed: () {
+                                _updateSettings(settings, () {
+                                  settings.confusableCharactersSheetId = controller.text;
+                                });
+                                Navigator.pop(context);
+                              },
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        ),
+                      );
                     },
                   ),
-                  CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionReadingToWord),
-                    value: settings.questionReadingToWord,
-                    onChanged: (val) {
-                      if (val != null) {
+                ],
+              ),
+              const SizedBox(height: 16),
+              SettingsGroup(
+                title: AppLocalizations.of(context)!.settingsGroupNotifications,
+                children: [
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsNotifications,
+                    subtitle: AppLocalizations.of(context)!.settingsNotificationsDesc,
+                    trailing: Switch(
+                      value: settings.notificationsEnabled,
+                      onChanged: (val) {
                         _updateSettings(settings, () {
-                          settings.questionReadingToWord = val;
-                          _ensureOneQuestionType(settings);
+                          settings.notificationsEnabled = val;
                         });
-                      }
-                    },
+                        if (val) {
+                          NotificationService.updateSchedule(settings.notificationIntervalMinutes);
+                        } else {
+                          if (!settings.streakNotificationsEnabled) {
+                            NotificationService.cancelSchedule();
+                          }
+                        }
+                      },
+                    ),
                   ),
-                  CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionVoiceToTranslate),
-                    value: settings.questionVoiceToTranslate,
-                    onChanged: (val) {
-                      if (val != null) {
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.streakNotificationsTitle,
+                    subtitle: AppLocalizations.of(context)!.streakNotificationsSubtitle,
+                    trailing: Switch(
+                      value: settings.streakNotificationsEnabled,
+                      onChanged: (val) {
                         _updateSettings(settings, () {
-                          settings.questionVoiceToTranslate = val;
-                          _ensureOneQuestionType(settings);
+                          settings.streakNotificationsEnabled = val;
                         });
-                      }
-                    },
+                        if (val || settings.notificationsEnabled) {
+                          NotificationService.updateSchedule(settings.notificationIntervalMinutes);
+                        } else {
+                          NotificationService.cancelSchedule();
+                        }
+                      },
+                    ),
                   ),
-                  CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionVoiceToWord),
-                    value: settings.questionVoiceToWord,
-                    onChanged: (val) {
-                      if (val != null) {
-                        _updateSettings(settings, () {
-                          settings.questionVoiceToWord = val;
-                          _ensureOneQuestionType(settings);
-                        });
-                      }
-                    },
+                  if (settings.notificationsEnabled) ...[
+                    SettingsTile(
+                      title: AppLocalizations.of(context)!.notificationFrequency,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _getFrequencyText(settings.notificationIntervalMinutes),
+                            style: TextStyle(color: accentColor, fontSize: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.chevron_right, color: Colors.grey),
+                        ],
+                      ),
+                      onTap: () async {
+                        final val = await showDialog<int>(
+                          context: context,
+                          builder: (context) => SimpleDialog(
+                            title: Text(AppLocalizations.of(context)!.notificationFrequency),
+                            children: [30, 60, 90, 120, 180, 360, 1440].map((e) {
+                              return SimpleDialogOption(
+                                onPressed: () => Navigator.pop(context, e),
+                                child: Text(_getFrequencyText(e)),
+                              );
+                            }).toList(),
+                          ),
+                        );
+                        if (val != null) {
+                          _updateSettings(settings, () {
+                            settings.notificationIntervalMinutes = val;
+                          });
+                          NotificationService.updateSchedule(val);
+                        }
+                      },
+                    ),
+                    SettingsTile(
+                      title: AppLocalizations.of(context)!.notificationTimeWindow,
+                      subtitle: '${settings.notificationTimeStart} - ${settings.notificationTimeEnd}',
+                      showDivider: false,
+                      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                      onTap: () async {
+                        await _pickTime(context, settings, true);
+                        if (context.mounted) {
+                          await _pickTime(context, settings, false);
+                        }
+                      },
+                    ),
+                  ] else ...[
+                    // Just to not leave trailing divider if hidden
+                    const SizedBox(height: 1),
+                  ]
+                ],
+              ),
+              const SizedBox(height: 16),
+              SettingsGroup(
+                title: AppLocalizations.of(context)!.settingsGroupAbout,
+                children: [
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.aboutDeveloper,
+                    subtitle: AppConstants.developerName,
                   ),
-                  CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionVoiceToWordInput),
-                    value: settings.questionVoiceToWordInput,
-                    onChanged: (val) {
-                      if (val != null) {
-                        _updateSettings(settings, () {
-                          settings.questionVoiceToWordInput = val;
-                          _ensureOneQuestionType(settings);
-                        });
-                      }
-                    },
-                  ),
-                  CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionVoiceToWordConstructor),
-                    value: settings.questionVoiceToWordConstructor,
-                    onChanged: (val) {
-                      if (val != null) {
-                        _updateSettings(settings, () {
-                          settings.questionVoiceToWordConstructor = val;
-                          _ensureOneQuestionType(settings);
-                        });
-                      }
-                    },
-                  ),
-                  CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionTranslateToWordInput),
-                    value: settings.questionTranslateToWordInput,
-                    onChanged: (val) {
-                      if (val != null) {
-                        _updateSettings(settings, () {
-                          settings.questionTranslateToWordInput = val;
-                          _ensureOneQuestionType(settings);
-                        });
-                      }
-                    },
-                  ),
-                  CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionTranslateToWordConstructor),
-                    value: settings.questionTranslateToWordConstructor,
-                    onChanged: (val) {
-                      if (val != null) {
-                        _updateSettings(settings, () {
-                          settings.questionTranslateToWordConstructor = val;
-                          _ensureOneQuestionType(settings);
-                        });
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.contactDeveloper,
+                    subtitle: AppConstants.developerEmail,
+                    showDivider: false,
+                    trailing: const Icon(Icons.copy, color: Colors.grey, size: 20),
+                    onTap: () {
+                      Clipboard.setData(const ClipboardData(text: AppConstants.developerEmail));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(AppLocalizations.of(context)!.emailCopied)),
+                        );
                       }
                     },
                   ),
                 ],
               ),
+              const SizedBox(height: 32),
             ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(
-          child: Text(AppLocalizations.of(context)!.errorLoadingSettings),
-        ),
+        error: (err, stack) => Center(child: Text('Error: $err')),
       ),
     );
   }

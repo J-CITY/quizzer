@@ -10,10 +10,12 @@ import '../domain/training_engine.dart';
 import '../data/services/database_service.dart';
 import 'training_result_screen.dart';
 import '../utils/constants.dart';
+import 'widgets/glow_button.dart';
 
 final ttsProvider = Provider<FlutterTts>((ref) {
   final tts = FlutterTts();
   tts.setLanguage("ja-JP");
+  tts.awaitSpeakCompletion(true);
   return tts;
 });
 
@@ -101,7 +103,13 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     _questions = engine.generateSession(
       sourceWords,
       settings,
+      AppLocalizations.of(context)!,
       isReviewMode: widget.isReviewMode,
+      customList: widget.customListId != null
+          ? (await db.getCustomLists()).firstWhere(
+              (l) => l.id == widget.customListId,
+            )
+          : null,
     );
 
     if (mounted) {
@@ -118,24 +126,14 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     if (settings.autoPlayVoice ||
         q.type == QuestionType.voiceToTrans ||
         q.type == QuestionType.voiceToJap) {
-      // Do not play if the prompt is translation (types 3, 6, 7)
+      // Do not play if the prompt is translation (types 3, 6, 7) or image (type 10)
       if (q.type == QuestionType.transToJap ||
           q.type == QuestionType.transToJapInput ||
-          q.type == QuestionType.transToJapConstructor) {
+          q.type == QuestionType.transToJapConstructor ||
+          q.type == QuestionType.imageToJap) {
         return;
       }
 
-      _playVoice();
-    }
-  }
-
-  Future<void> _playVoiceIfNeeded() async {
-    final settings = await ref.read(databaseServiceProvider).getSettings();
-    if (settings.autoPlayVoice) {
-      if (settings.playSoundEffects) {
-        // Wait for sound effect to finish
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
       _playVoice();
     }
   }
@@ -154,17 +152,24 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   void _onOptionSelected(String option) async {
     if (_userAnswers.containsKey(_currentIndex)) return; // Already answered
 
+    final int answeredIndex = _currentIndex;
+
     setState(() {
       _userAnswers[_currentIndex] = option;
     });
 
-    _playVoiceIfNeeded();
-
     final q = _questions[_currentIndex];
-    final isCorrect = option == q.correctAnswer;
     final wordId = q.word.id;
-
     final settings = await ref.read(databaseServiceProvider).getSettings();
+
+    bool isCorrect = option == q.correctAnswer;
+    if (q.type == QuestionType.transToJapInput ||
+        q.type == QuestionType.voiceToJapInput) {
+      isCorrect =
+          (option == q.word.japanese) ||
+          (q.word.reading != null && option == q.word.reading);
+    }
+
     if (settings.playSoundEffects) {
       if (isCorrect) {
         await _audioPlayer.play(AssetSource('sounds/true.mp3'));
@@ -185,10 +190,24 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
       }
     }
 
-    if (settings.autoAdvanceToNextQuestion) {
-      await Future.delayed(const Duration(seconds: 1));
-      if (!mounted) return;
-      _goForward();
+    if (settings.autoPlayVoice) {
+      if (settings.playSoundEffects) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      await _playVoice();
+      if (settings.autoAdvanceToNextQuestion) {
+        await Future.delayed(AppConstants.audioAdvanceDelay);
+        if (mounted && _currentIndex == answeredIndex) {
+          _goForward();
+        }
+      }
+    } else {
+      if (settings.autoAdvanceToNextQuestion) {
+        await Future.delayed(const Duration(seconds: 1));
+        if (mounted && _currentIndex == answeredIndex) {
+          _goForward();
+        }
+      }
     }
   }
 
@@ -224,13 +243,17 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
 
     final mistakesList = <Word>[];
 
+    int learnedCount = 0;
+    int inProgressCount = 0;
+
     if (!widget.isReviewMode) {
-      // Wrong answers reset to 0
+      // Wrong answers get -1 progress (min 0)
       for (var id in _wrongWordIds) {
         final w = wordsMap[id];
         if (w != null) {
           mistakesList.add(w);
-          await db.updateWordProgress(w, 0);
+          final newProgress = (w.progress > 0) ? w.progress - 1 : 0;
+          await db.updateWordProgress(w, newProgress);
         }
       }
 
@@ -238,8 +261,15 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
       for (var id in _correctFirstTryWordIds) {
         if (!_wrongWordIds.contains(id)) {
           final w = wordsMap[id];
-          if (w != null && w.progress < 5) {
-            await db.updateWordProgress(w, w.progress + 1);
+          if (w != null) {
+            if (w.progress < 5) {
+              await db.updateWordProgress(w, w.progress + 1);
+            }
+            if (w.progress >= 5) {
+              learnedCount++;
+            } else {
+              inProgressCount++;
+            }
           }
         }
       }
@@ -249,6 +279,18 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
         final w = wordsMap[id];
         if (w != null) mistakesList.add(w);
       }
+      for (var id in _correctFirstTryWordIds) {
+        if (!_wrongWordIds.contains(id)) {
+          final w = wordsMap[id];
+          if (w != null) {
+            if (w.progress >= 5) {
+              learnedCount++;
+            } else {
+              inProgressCount++;
+            }
+          }
+        }
+      }
     }
 
     await db.saveTrainingSession(widget.customListId);
@@ -257,7 +299,11 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => TrainingResultScreen(mistakes: mistakesList),
+          builder: (_) => TrainingResultScreen(
+            mistakes: mistakesList,
+            learnedCount: learnedCount,
+            inProgressCount: inProgressCount,
+          ),
         ),
       );
     }
@@ -298,9 +344,25 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
           q.type == QuestionType.voiceToJapInput ||
           q.type == QuestionType.voiceToJapConstructor ||
           q.type == QuestionType.transToJapInput ||
-          q.type == QuestionType.transToJapConstructor) {
+          q.type == QuestionType.transToJapConstructor ||
+          q.type == QuestionType.imageToJap) {
         mainText = q.word.japanese;
         subText = q.word.reading;
+      }
+    }
+
+    bool showImage = false;
+    if (q.word.imageUrl != null && q.word.imageUrl!.isNotEmpty) {
+      if (hasAnswered) {
+        showImage = true;
+      } else if (q.type == QuestionType.imageToJap) {
+        showImage = true;
+      } else if (q.type == QuestionType.transToJap ||
+          q.type == QuestionType.transToJapInput ||
+          q.type == QuestionType.transToJapConstructor ||
+          q.type == QuestionType.japToReading ||
+          q.type == QuestionType.readingToJap) {
+        showImage = true;
       }
     }
 
@@ -315,19 +377,17 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
         final shouldPop = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Завершить тренировку?'),
-            content: const Text(
-              'Ваш прогресс в этой сессии не будет сохранен.',
-            ),
+            title: Text(AppLocalizations.of(context)!.finishTrainingTitle),
+            content: Text(AppLocalizations.of(context)!.finishTrainingDesc),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Отмена'),
+                child: Text(AppLocalizations.of(context)!.cancel),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
                 child: Text(
-                  'Выйти',
+                  AppLocalizations.of(context)!.exit,
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
@@ -342,16 +402,24 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
         }
       },
       child: Scaffold(
-        appBar: AppBar(title: Text(progressText), centerTitle: true),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        appBar: AppBar(
+          title: Text(progressText),
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
         body: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onHorizontalDragEnd: (details) {
             if (details.primaryVelocity == null) return;
             if (details.primaryVelocity! < -300) {
-              if (_currentIndex < _questions.length - 1) {
-                _goForward();
-              } else if (hasAnswered) {
-                _finishTraining();
+              if (hasAnswered) {
+                if (_currentIndex < _questions.length - 1) {
+                  _goForward();
+                } else {
+                  _finishTraining();
+                }
               }
             } else if (details.primaryVelocity! > 300) {
               if (_currentIndex > 0) {
@@ -367,125 +435,212 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                 if (!isKeyboardOpen) ...[
                   Expanded(
                     flex: 2,
-                    child: Card(
-                      elevation: 4,
-                      child: Stack(
-                        children: [
-                          GestureDetector(
-                            onLongPress: () {
-                              Clipboard.setData(ClipboardData(text: q.prompt));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    AppLocalizations.of(
-                                      context,
-                                    )!.copiedToClipboard,
-                                  ),
+                    child: Stack(
+                      alignment: Alignment.topCenter,
+                      clipBehavior: Clip.none,
+                      children: [
+                        Positioned(
+                          top: -10,
+                          child: Container(
+                            width: 150,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              boxShadow: [
+                                BoxShadow(
+                                  color: primaryColor.withValues(alpha: 0.6),
+                                  blurRadius: 40,
+                                  spreadRadius: 10,
                                 ),
-                              );
-                            },
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  if ((q.type == QuestionType.voiceToTrans ||
-                                          q.type == QuestionType.voiceToJap ||
-                                          q.type == QuestionType.voiceToJapInput ||
-                                          q.type == QuestionType.voiceToJapConstructor) &&
-                                      !hasAnswered)
-                                    Column(
-                                      children: [
-                                        IconButton(
-                                          icon: Icon(
-                                            Icons.volume_up,
-                                            size: 80,
-                                            color: primaryColor,
-                                          ),
-                                          onPressed: _playVoice,
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          AppLocalizations.of(
-                                            context,
-                                          )!.listenToTheWord,
-                                          style: TextStyle(fontSize: 24),
-                                        ),
-                                      ],
-                                    )
-                                  else ...[
-                                    AutoSizeText(
-                                      mainText,
-                                      style: TextStyle(
-                                        fontSize: 48,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 3,
-                                      minFontSize: 24,
-                                    ),
-                                    if (subText != null && subText.isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          top: 8.0,
-                                        ),
-                                        child: Text(
-                                          subText,
-                                          style: TextStyle(
-                                            fontSize: 24,
-                                            color: Theme.of(context)
-                                                .extension<
-                                                  AppColorsExtension
-                                                >()!
-                                                .textSecondary,
-                                          ),
-                                        ),
-                                      ),
-                                    if (showTranslation)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          top: 16.0,
-                                        ),
-                                        child: Text(
-                                          q.word.translation,
-                                          style: TextStyle(
-                                            fontSize: 20,
-                                            color: primaryColor,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
-                                  ],
-                                ],
-                              ),
+                              ],
                             ),
                           ),
-                          // Hide small mic if:
-                          // 1. Not answered and type is Trans->Jap (to avoid hint)
-                          // 2. Not answered and type is Auditory (because big mic is shown)
-                          if (!(!hasAnswered &&
-                              (q.type == QuestionType.transToJap ||
-                                  q.type == QuestionType.transToJapInput ||
-                                  q.type ==
-                                      QuestionType.transToJapConstructor ||
-                                  q.type == QuestionType.voiceToTrans ||
-                                  q.type == QuestionType.voiceToJap ||
-                                  q.type == QuestionType.voiceToJapInput ||
-                                  q.type == QuestionType.voiceToJapConstructor)))
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: IconButton(
-                                icon: Icon(
-                                  Icons.volume_up,
-                                  size: 32,
-                                  color: primaryColor,
-                                ),
-                                onPressed: _playVoice,
+                        ),
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: primaryColor.withValues(alpha: 0.1),
+                                blurRadius: 20,
+                                offset: Offset.zero,
+                              ),
+                            ],
+                          ),
+                          child: Card(
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              side: BorderSide(
+                                color: primaryColor.withOpacity(0.5),
+                                width: 1,
                               ),
                             ),
-                        ],
-                      ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (showImage)
+                                  Expanded(
+                                    flex: 4,
+                                    child: ClipRRect(
+                                      borderRadius: const BorderRadius.vertical(
+                                        top: Radius.circular(20),
+                                      ),
+                                      child: Image.network(
+                                        q.word.imageUrl!,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                const Center(
+                                                  child: Icon(
+                                                    Icons.broken_image,
+                                                    size: 48,
+                                                    color: Colors.grey,
+                                                  ),
+                                                ),
+                                      ),
+                                    ),
+                                  ),
+                                Expanded(
+                                  flex: showImage ? 5 : 1,
+                                  child: Stack(
+                                    children: [
+                                      GestureDetector(
+                                        onLongPress: () {
+                                          String textToCopy =
+                                              mainText.isNotEmpty
+                                              ? mainText
+                                              : q.word.japanese;
+                                          Clipboard.setData(
+                                            ClipboardData(text: textToCopy),
+                                          );
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                AppLocalizations.of(
+                                                  context,
+                                                )!.copiedToClipboard,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        child: Center(
+                                          child: SingleChildScrollView(
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                              if ((q.type == QuestionType.voiceToTrans ||
+                                                      q.type == QuestionType.voiceToJap ||
+                                                      q.type == QuestionType.voiceToJapInput ||
+                                                      q.type == QuestionType.voiceToJapConstructor ||
+                                                      q.type == QuestionType.imageToJap) &&
+                                                  !hasAnswered)
+                                                Column(
+                                                  children: [
+                                                    IconButton(
+                                                      icon: Icon(
+                                                        Icons.volume_up,
+                                                        size: showImage ? 56 : 80,
+                                                        color: primaryColor,
+                                                      ),
+                                                      onPressed: _playVoice,
+                                                    ),
+                                                    SizedBox(height: showImage ? 8 : 16),
+                                                    Text(
+                                                      AppLocalizations.of(
+                                                        context,
+                                                      )!.listenToTheWord,
+                                                      style: TextStyle(
+                                                        fontSize: showImage ? 18 : 24,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                )
+                                              else ...[
+                                                AutoSizeText(
+                                                  mainText,
+                                                  style: TextStyle(
+                                                    fontSize: showImage ? 32 : 48,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                  maxLines: 3,
+                                                  minFontSize: showImage ? 16 : 24,
+                                                ),
+                                                if (subText != null &&
+                                                    subText.isNotEmpty)
+                                                  Padding(
+                                                    padding: EdgeInsets.only(
+                                                      top: showImage ? 4.0 : 8.0,
+                                                    ),
+                                                    child: Text(
+                                                      subText,
+                                                      style: TextStyle(
+                                                        fontSize: showImage ? 18 : 24,
+                                                        color: Theme.of(context)
+                                                            .extension<
+                                                              AppColorsExtension
+                                                            >()!
+                                                            .textSecondary,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                if (showTranslation)
+                                                  Padding(
+                                                    padding: EdgeInsets.only(
+                                                      top: showImage ? 8.0 : 16.0,
+                                                    ),
+                                                    child: Text(
+                                                      q.word.translation,
+                                                      style: TextStyle(
+                                                        fontSize: showImage ? 16 : 20,
+                                                        color: Colors.white,
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
+                                                      textAlign: TextAlign.center,
+                                                    ),
+                                                  ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                      // Hide small mic if:
+                                      // 1. Not answered and type is Trans->Jap (to avoid hint)
+                                      // 2. Not answered and type is Auditory (because big mic is shown)
+                                      if (!(!hasAnswered &&
+                                          (q.type == QuestionType.transToJap ||
+                                              q.type == QuestionType.transToJapInput ||
+                                              q.type == QuestionType.transToJapConstructor ||
+                                              q.type == QuestionType.voiceToTrans ||
+                                              q.type == QuestionType.voiceToJap ||
+                                              q.type == QuestionType.voiceToJapInput ||
+                                              q.type == QuestionType.voiceToJapConstructor ||
+                                              q.type == QuestionType.imageToJap)))
+                                        Positioned(
+                                          top: 8,
+                                          right: 8,
+                                          child: IconButton(
+                                            icon: Icon(
+                                              Icons.volume_up,
+                                              size: 32,
+                                              color: primaryColor,
+                                            ),
+                                            onPressed: _playVoice,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -495,20 +650,63 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                     flex: 1,
                     child: Card(
                       elevation: 2,
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: AutoSizeText(
-                            mainText,
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: (!hasAnswered &&
+                                      (q.type == QuestionType.voiceToTrans ||
+                                          q.type == QuestionType.voiceToJap ||
+                                          q.type == QuestionType.voiceToJapInput ||
+                                          q.type == QuestionType.voiceToJapConstructor ||
+                                          q.type == QuestionType.imageToJap))
+                                  ? IconButton(
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      icon: Icon(
+                                        Icons.volume_up,
+                                        size: 48,
+                                        color: primaryColor,
+                                      ),
+                                      onPressed: _playVoice,
+                                    )
+                                  : AutoSizeText(
+                                      mainText,
+                                      style: TextStyle(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      minFontSize: 16,
+                                    ),
                             ),
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            minFontSize: 16,
                           ),
-                        ),
+                          if (!(!hasAnswered &&
+                              (q.type == QuestionType.transToJap ||
+                                  q.type == QuestionType.transToJapInput ||
+                                  q.type ==
+                                      QuestionType.transToJapConstructor ||
+                                  q.type == QuestionType.voiceToTrans ||
+                                  q.type == QuestionType.voiceToJap ||
+                                  q.type == QuestionType.voiceToJapInput ||
+                                  q.type ==
+                                      QuestionType.voiceToJapConstructor)))
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: IconButton(
+                                icon: Icon(
+                                  Icons.volume_up,
+                                  size: 28,
+                                  color: primaryColor,
+                                ),
+                                onPressed: _playVoice,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
@@ -519,15 +717,35 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    ElevatedButton.icon(
-                      onPressed: _currentIndex > 0 ? _goBack : null,
-                      icon: Icon(Icons.arrow_back),
-                      label: const Text('Назад'),
+                    Expanded(
+                      child: GlowButton(
+                        onPressed: _currentIndex > 0 ? _goBack : null,
+                        isPrimary: false,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.arrow_back),
+                            const SizedBox(width: 8),
+                            Text(AppLocalizations.of(context)!.back),
+                          ],
+                        ),
+                      ),
                     ),
-                    ElevatedButton.icon(
-                      onPressed: hasAnswered ? _goForward : null,
-                      icon: Icon(Icons.arrow_forward),
-                      label: const Text('Вперед'),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: GlowButton(
+                        onPressed: hasAnswered ? _goForward : null,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(AppLocalizations.of(context)!.forward),
+                            const SizedBox(width: 8),
+                            Icon(Icons.arrow_forward),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -544,9 +762,11 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     bool hasAnswered,
     String? selectedOption,
   ) {
-    if (q.type == QuestionType.transToJapInput || q.type == QuestionType.voiceToJapInput) {
+    if (q.type == QuestionType.transToJapInput ||
+        q.type == QuestionType.voiceToJapInput) {
       return _buildTextInputArea(q, hasAnswered, selectedOption);
-    } else if (q.type == QuestionType.transToJapConstructor || q.type == QuestionType.voiceToJapConstructor) {
+    } else if (q.type == QuestionType.transToJapConstructor ||
+        q.type == QuestionType.voiceToJapConstructor) {
       return _buildConstructorArea(q, hasAnswered, selectedOption);
     } else {
       return _buildMultipleChoiceArea(q, hasAnswered, selectedOption);
@@ -560,7 +780,14 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   ) {
     Color? borderColor;
     if (hasAnswered) {
-      if (selectedOption == q.correctAnswer) {
+      bool isCorrect = selectedOption == q.correctAnswer;
+      if (q.type == QuestionType.transToJapInput ||
+          q.type == QuestionType.voiceToJapInput) {
+        isCorrect =
+            (selectedOption == q.word.japanese) ||
+            (q.word.reading != null && selectedOption == q.word.reading);
+      }
+      if (isCorrect) {
         borderColor = Theme.of(
           context,
         ).extension<AppColorsExtension>()!.success;
@@ -619,9 +846,17 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
             child: Column(
               children: [
                 Text(
-                  'Ваш ответ: $selectedOption',
+                  AppLocalizations.of(
+                    context,
+                  )!.yourAnswer(selectedOption ?? ''),
                   style: TextStyle(
-                    color: selectedOption == q.correctAnswer
+                    color:
+                        (selectedOption == q.correctAnswer ||
+                            ((q.type == QuestionType.transToJapInput ||
+                                    q.type == QuestionType.voiceToJapInput) &&
+                                ((selectedOption == q.word.japanese) ||
+                                    (q.word.reading != null &&
+                                        selectedOption == q.word.reading))))
                         ? Theme.of(
                             context,
                           ).extension<AppColorsExtension>()!.success
@@ -629,11 +864,18 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                     fontSize: 18,
                   ),
                 ),
-                if (selectedOption != q.correctAnswer)
+                if (!(selectedOption == q.correctAnswer ||
+                    ((q.type == QuestionType.transToJapInput ||
+                            q.type == QuestionType.voiceToJapInput) &&
+                        ((selectedOption == q.word.japanese) ||
+                            (q.word.reading != null &&
+                                selectedOption == q.word.reading)))))
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
-                      'Правильный ответ: ${q.correctAnswer}',
+                      AppLocalizations.of(
+                        context,
+                      )!.correctAnswer(q.correctAnswer),
                       style: TextStyle(
                         color: Theme.of(
                           context,
@@ -720,7 +962,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
             child: Column(
               children: [
                 Text(
-                  'Ваш ответ: $selectedOption',
+                  AppLocalizations.of(
+                    context,
+                  )!.yourAnswer(selectedOption ?? ''),
                   style: TextStyle(
                     color: selectedOption == q.correctAnswer
                         ? Theme.of(
@@ -735,7 +979,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
-                      'Правильный ответ: ${q.correctAnswer}',
+                      AppLocalizations.of(
+                        context,
+                      )!.correctAnswer(q.correctAnswer),
                       style: TextStyle(
                         color: Theme.of(
                           context,
@@ -779,30 +1025,34 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: buttonColor,
-              foregroundColor: textColor,
-              padding: const EdgeInsets.all(20),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
+          child: GlowButton(
+            color: buttonColor ?? Theme.of(context).colorScheme.surface,
+            isPrimary: buttonColor != null,
+            padding: const EdgeInsets.all(20),
+            borderRadius: 12,
+            width: double.infinity,
             onPressed: () => _onOptionSelected(option),
-            onLongPress: () {
-              Clipboard.setData(ClipboardData(text: option));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    AppLocalizations.of(context)!.copiedToClipboard,
+            child: GestureDetector(
+              onLongPress: () {
+                Clipboard.setData(ClipboardData(text: option));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      AppLocalizations.of(context)!.copiedToClipboard,
+                    ),
                   ),
+                );
+              },
+              child: AutoSizeText(
+                option,
+                style: TextStyle(
+                  fontSize: 20,
+                  color: textColor ?? Theme.of(context).colorScheme.onSurface,
                 ),
-              );
-            },
-            child: Text(
-              option,
-              style: TextStyle(fontSize: 18),
-              textAlign: TextAlign.center,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                minFontSize: 12,
+              ),
             ),
           ),
         );

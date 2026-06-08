@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:lottie/lottie.dart';
@@ -10,6 +11,7 @@ import '../data/services/database_service.dart';
 import '../utils/lottie_color_shift.dart';
 import 'custom_list_details_screen.dart';
 import '../utils/constants.dart';
+import 'widgets/acrylic_card.dart';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
@@ -140,7 +142,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     }
     if (maxY < 5) maxY = 5;
 
-    final primaryColor = Theme.of(context).colorScheme.primary;
     return SizedBox(
       height: 200,
       child: BarChart(
@@ -155,8 +156,10 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 final day = group.x + 1;
                 final count = rod.toY.toInt();
                 return BarTooltipItem(
-                  '$day числа\n$count тренировок',
-                  TextStyle(
+                  AppLocalizations.of(
+                    context,
+                  )!.statisticsTooltip(day.toString(), count.toString()),
+                  const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
@@ -172,10 +175,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 getTitlesWidget: (value, meta) {
                   final day = value.toInt() + 1;
                   if (day % 5 == 0 || day == 1 || day == daysInMonth) {
-                    return Text(
-                      day.toString(),
-                      style: TextStyle(fontSize: 10),
-                    );
+                    return Text(day.toString(), style: TextStyle(fontSize: 10));
                   }
                   return const SizedBox();
                 },
@@ -215,7 +215,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
               barRods: [
                 BarChartRodData(
                   toY: _showCharts ? sessionCounts[i].toDouble() : 0,
-                  color: Theme.of(context).extension<AppColorsExtension>()!.chart,
+                  color: Theme.of(
+                    context,
+                  ).extension<AppColorsExtension>()!.chart,
                   width: 8,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(4),
@@ -230,78 +232,156 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     );
   }
 
+  Widget _buildLegendItem(Color color, String label, int value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 8),
+        Text('$label: $value', style: const TextStyle(fontSize: 14)),
+      ],
+    );
+  }
+
   Widget _buildPieChart(
     String title,
     int learned,
+    int inProgress,
     int total, {
     VoidCallback? onTap,
+    bool showLegend = false,
   }) {
+    final int unlearned = total - learned - inProgress;
+
     final double learnedPercent = total == 0 ? 0 : (learned / total) * 100;
+    final double inProgressPercent = total == 0
+        ? 0
+        : (inProgress / total) * 100;
     final double unlearnedPercent = total == 0
         ? 100
-        : ((total - learned) / total) * 100;
+        : (unlearned / total) * 100;
+
     final bool allLearned = total > 0 && learned == total;
+
+    final chartWidget = SizedBox(
+      height: 100,
+      width: showLegend ? 100 : double.infinity,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          PieChart(
+            PieChartData(
+              sectionsSpace: 2,
+              centerSpaceRadius: 32,
+              sections: [
+                PieChartSectionData(
+                  color: Theme.of(
+                    context,
+                  ).extension<AppColorsExtension>()!.success,
+                  value: _showCharts ? learnedPercent : 0,
+                  title: '',
+                  radius: 14,
+                ),
+                PieChartSectionData(
+                  color: Theme.of(
+                    context,
+                  ).extension<AppColorsExtension>()!.chart,
+                  value: _showCharts ? inProgressPercent : 0,
+                  title: '',
+                  radius: 14,
+                ),
+                PieChartSectionData(
+                  color: Theme.of(
+                    context,
+                  ).extension<AppColorsExtension>()!.border,
+                  value: _showCharts ? unlearnedPercent : 100,
+                  title: '',
+                  radius: 10,
+                ),
+              ],
+            ),
+            swapAnimationDuration: const Duration(milliseconds: 400),
+          ),
+          if (allLearned)
+            Icon(
+              Icons.check_circle,
+              color: Theme.of(context).extension<AppColorsExtension>()!.success,
+              size: 40,
+            )
+          else
+            Text(
+              '$learned / $total',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+        ],
+      ),
+    );
 
     return GestureDetector(
       onTap: onTap,
-      child: Card(
-        elevation: 2,
+      child: AcrylicCard(
+        margin: EdgeInsets.zero,
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+              SizedBox(
+                height: 48,
+                child: Center(
+                  child: Text(
+                    title,
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 8),
-              SizedBox(
-                height: 100,
-                child: Stack(
-                  alignment: Alignment.center,
+              if (showLegend)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    PieChart(
-                      PieChartData(
-                        sectionsSpace: 2,
-                        centerSpaceRadius: 32,
-                        sections: [
-                          PieChartSectionData(
-                            color: Theme.of(context).extension<AppColorsExtension>()!.success,
-                            value: _showCharts ? learnedPercent : 0,
-                            title: '',
-                            radius: 14,
-                          ),
-                          PieChartSectionData(
-                            color: Theme.of(context).extension<AppColorsExtension>()!.border,
-                            value: _showCharts ? unlearnedPercent : 100,
-                            title: '',
-                            radius: 10,
-                          ),
-                        ],
-                      ),
-                      swapAnimationDuration: const Duration(milliseconds: 400),
+                    chartWidget,
+                    const SizedBox(width: 32),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildLegendItem(
+                          Theme.of(
+                            context,
+                          ).extension<AppColorsExtension>()!.success,
+                          AppLocalizations.of(context)!.learned,
+                          learned,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildLegendItem(
+                          Theme.of(
+                            context,
+                          ).extension<AppColorsExtension>()!.chart,
+                          AppLocalizations.of(context)!.inProgress,
+                          inProgress,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildLegendItem(
+                          Theme.of(
+                            context,
+                          ).extension<AppColorsExtension>()!.border,
+                          AppLocalizations.of(context)!.newWords,
+                          unlearned,
+                        ),
+                      ],
                     ),
-                    if (allLearned)
-                      Icon(
-                        Icons.check_circle,
-                        color: Theme.of(context).extension<AppColorsExtension>()!.success,
-                        size: 40,
-                      )
-                    else
-                      Text(
-                        '$learned / $total',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
                   ],
-                ),
-              ),
+                )
+              else
+                chartWidget,
             ],
           ),
         ),
@@ -322,6 +402,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
     final int totalWords = _allWords.length;
     final int learnedWords = _allWords.where((w) => w.progress >= 5).length;
+    final int inProgressWords = _allWords
+        .where((w) => w.progress > 0 && w.progress < 5)
+        .length;
 
     return Scaffold(
       body: SingleChildScrollView(
@@ -354,10 +437,14 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                             foreground: Paint()
                               ..style = PaintingStyle.stroke
                               ..strokeWidth = 4
-                              ..color = Theme.of(context).extension<AppColorsExtension>()!.textPrimary,
+                              ..color = Theme.of(
+                                context,
+                              ).extension<AppColorsExtension>()!.textPrimary,
                             shadows: [
                               Shadow(
-                                color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary,
+                                color: Theme.of(context)
+                                    .extension<AppColorsExtension>()!
+                                    .textSecondary,
                                 blurRadius: 12,
                                 offset: Offset(2, 4),
                               ),
@@ -379,8 +466,13 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
               ),
             ),
             Text(
-              'Дней подряд',
-              style: TextStyle(fontSize: 18, color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary),
+              AppLocalizations.of(context)!.daysInARow,
+              style: TextStyle(
+                fontSize: 18,
+                color: Theme.of(
+                  context,
+                ).extension<AppColorsExtension>()!.textSecondary,
+              ),
             ),
             const SizedBox(height: 32),
 
@@ -415,7 +507,13 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
             const SizedBox(height: 32),
 
             // Overall Progress Pie Chart
-            _buildPieChart('Все слова', learnedWords, totalWords),
+            _buildPieChart(
+              AppLocalizations.of(context)!.tabAllWords,
+              learnedWords,
+              inProgressWords,
+              totalWords,
+              showLegend: true,
+            ),
             const SizedBox(height: 16),
 
             // Grid of Custom Lists Pie Charts
@@ -436,9 +534,13 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 final listLearned = listWords
                     .where((w) => w.progress >= 5)
                     .length;
+                final listInProgress = listWords
+                    .where((w) => w.progress > 0 && w.progress < 5)
+                    .length;
                 return _buildPieChart(
                   list.name,
                   listLearned,
+                  listInProgress,
                   listWords.length,
                   onTap: () {
                     Navigator.push(

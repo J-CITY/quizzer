@@ -2,8 +2,10 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/word.dart';
 import '../data/models/settings.dart';
+import '../data/models/custom_list.dart';
 import '../utils/string_utils.dart';
 import '../utils/confusable_characters.dart';
+import 'package:quizzer/l10n/app_localizations.dart';
 
 final trainingEngineProvider = Provider<TrainingEngine>((ref) {
   return TrainingEngine();
@@ -20,6 +22,7 @@ class QuestionType {
   static const int transToJapConstructor = 7;
   static const int voiceToJapInput = 8;
   static const int voiceToJapConstructor = 9;
+  static const int imageToJap = 10;
 }
 
 class Question {
@@ -44,7 +47,13 @@ class TrainingEngine {
   final _random = Random();
 
   /// Generates a list of [count] questions from [sourceWords].
-  List<Question> generateSession(List<Word> sourceWords, Settings settings, {bool isReviewMode = false}) {
+  List<Question> generateSession(
+    List<Word> sourceWords,
+    Settings settings,
+    AppLocalizations l10n, {
+    bool isReviewMode = false,
+    CustomList? customList,
+  }) {
     if (sourceWords.isEmpty) return [];
 
     final count = settings.questionsCount;
@@ -57,11 +66,11 @@ class TrainingEngine {
     } else {
       // Learn mode: take up to [count] unlearned words, don't repeat
       List<Word> unlearned = sourceWords.where((w) => w.progress < 5).toList();
-      
+
       if (unlearned.isEmpty) {
         unlearned = List.from(sourceWords);
       }
-      
+
       unlearned.shuffle(_random);
       unlearned.sort((a, b) => a.progress.compareTo(b.progress));
 
@@ -70,33 +79,89 @@ class TrainingEngine {
       selectedWords.shuffle(_random);
     }
 
-    return selectedWords.map((w) => _generateQuestion(w, sourceWords, settings)).toList();
+    return selectedWords
+        .map(
+          (w) => _generateQuestion(w, sourceWords, settings, l10n, customList),
+        )
+        .toList();
   }
 
-  Question _generateQuestion(Word word, List<Word> allWords, Settings settings) {
+  Question _generateQuestion(
+    Word word,
+    List<Word> allWords,
+    Settings settings,
+    AppLocalizations l10n,
+    CustomList? customList,
+  ) {
     List<int> availableTypes = [];
-    
-    if (settings.questionWordToTranslate) availableTypes.add(QuestionType.japToTrans);
-    if (settings.questionTranslateToWord) availableTypes.add(QuestionType.transToJap);
-    if (settings.questionWordToReading && word.reading != null && word.reading!.isNotEmpty) {
+
+    bool useVoiceToTranslate = settings.questionVoiceToTranslate;
+    bool useVoiceToWord = settings.questionVoiceToWord;
+    bool useVoiceToWordInput = settings.questionVoiceToWordInput;
+    bool useVoiceToWordConstructor = settings.questionVoiceToWordConstructor;
+    bool useTranslateToWordInput = settings.questionTranslateToWordInput;
+    bool useTranslateToWordConstructor =
+        settings.questionTranslateToWordConstructor;
+    bool useWordToTranslate = settings.questionWordToTranslate;
+    bool useTranslateToWord = settings.questionTranslateToWord;
+    bool useWordToReading = settings.questionWordToReading;
+    bool useReadingToWord = settings.questionReadingToWord;
+    bool useImageToWord = settings.questionImageToWord && word.imageUrl != null && word.imageUrl!.isNotEmpty;
+
+    if (customList != null && customList.useCustomQuestionSettings) {
+      useVoiceToTranslate = customList.questionVoiceToTranslate;
+      useVoiceToWord = customList.questionVoiceToWord;
+      useVoiceToWordInput = customList.questionVoiceToWordInput;
+      useVoiceToWordConstructor = customList.questionVoiceToWordConstructor;
+      useTranslateToWordInput = customList.questionTranslateToWordInput;
+      useTranslateToWordConstructor =
+          customList.questionTranslateToWordConstructor;
+      useWordToTranslate = customList.questionWordToTranslate;
+      useTranslateToWord = customList.questionTranslateToWord;
+      useWordToReading = customList.questionWordToReading;
+      useReadingToWord = customList.questionReadingToWord;
+      useImageToWord = customList.questionImageToWord && word.imageUrl != null && word.imageUrl!.isNotEmpty;
+    }
+
+    if (useWordToTranslate) {
+      availableTypes.add(QuestionType.japToTrans);
+    }
+    if (useTranslateToWord) {
+      availableTypes.add(QuestionType.transToJap);
+    }
+    if (useWordToReading && word.reading != null && word.reading!.isNotEmpty) {
       availableTypes.add(QuestionType.japToReading);
     }
-    if (settings.questionReadingToWord && word.reading != null && word.reading!.isNotEmpty) {
+    if (useReadingToWord && word.reading != null && word.reading!.isNotEmpty) {
       availableTypes.add(QuestionType.readingToJap);
     }
-    if (settings.questionVoiceToTranslate) availableTypes.add(QuestionType.voiceToTrans);
-    if (settings.questionVoiceToWord) availableTypes.add(QuestionType.voiceToJap);
-    if (settings.questionVoiceToWordInput) availableTypes.add(QuestionType.voiceToJapInput);
-    if (settings.questionVoiceToWordConstructor) availableTypes.add(QuestionType.voiceToJapConstructor);
-    if (settings.questionTranslateToWordInput) availableTypes.add(QuestionType.transToJapInput);
-    if (settings.questionTranslateToWordConstructor) availableTypes.add(QuestionType.transToJapConstructor);
-
+    if (useVoiceToTranslate) {
+      availableTypes.add(QuestionType.voiceToTrans);
+    }
+    if (useVoiceToWord) {
+      availableTypes.add(QuestionType.voiceToJap);
+    }
+    if (useVoiceToWordInput) {
+      availableTypes.add(QuestionType.voiceToJapInput);
+    }
+    if (useVoiceToWordConstructor) {
+      availableTypes.add(QuestionType.voiceToJapConstructor);
+    }
+    if (useTranslateToWordInput) {
+      availableTypes.add(QuestionType.transToJapInput);
+    }
+    if (useTranslateToWordConstructor) {
+      availableTypes.add(QuestionType.transToJapConstructor);
+    }
+    if (useImageToWord) {
+      availableTypes.add(QuestionType.imageToJap);
+    }
     if (availableTypes.isEmpty) {
       availableTypes.add(QuestionType.japToTrans); // Fallback
     }
 
     final type = availableTypes[_random.nextInt(availableTypes.length)];
-    
+
     String prompt = '';
     String? subtitle;
     String correctAnswer = '';
@@ -115,33 +180,75 @@ class TrainingEngine {
       case QuestionType.japToReading:
         prompt = word.japanese;
         correctAnswer = word.reading!;
-        wrongOptions = _getWrongOptions(allWords, word, (w) => w.reading, true, settings);
+        wrongOptions = _getWrongOptions(
+          allWords,
+          word,
+          (w) => w.reading,
+          true,
+          settings,
+          l10n,
+        );
         break;
       case QuestionType.readingToJap:
         prompt = word.reading!;
         correctAnswer = word.japanese;
-        wrongOptions = _getWrongOptions(allWords, word, (w) => w.japanese, true, settings);
+        wrongOptions = _getWrongOptions(
+          allWords,
+          word,
+          (w) => w.japanese,
+          true,
+          settings,
+          l10n,
+        );
         break;
       case QuestionType.japToTrans:
         prompt = word.japanese;
         subtitle = word.reading;
         correctAnswer = word.translation;
-        wrongOptions = _getWrongOptions(allWords, word, (w) => w.translation, false, settings);
+        wrongOptions = _getWrongOptions(
+          allWords,
+          word,
+          (w) => w.translation,
+          false,
+          settings,
+          l10n,
+        );
         break;
       case QuestionType.transToJap:
         prompt = word.translation;
         correctAnswer = getJapaneseDisplay(word);
-        wrongOptions = _getWrongOptions(allWords, word, getJapaneseDisplay, true, settings);
+        wrongOptions = _getWrongOptions(
+          allWords,
+          word,
+          getJapaneseDisplay,
+          true,
+          settings,
+          l10n,
+        );
         break;
       case QuestionType.voiceToTrans:
         prompt = ''; // handled in UI
         correctAnswer = word.translation;
-        wrongOptions = _getWrongOptions(allWords, word, (w) => w.translation, false, settings);
+        wrongOptions = _getWrongOptions(
+          allWords,
+          word,
+          (w) => w.translation,
+          false,
+          settings,
+          l10n,
+        );
         break;
       case QuestionType.voiceToJap:
         prompt = ''; // handled in UI
         correctAnswer = getJapaneseDisplay(word);
-        wrongOptions = _getWrongOptions(allWords, word, getJapaneseDisplay, true, settings);
+        wrongOptions = _getWrongOptions(
+          allWords,
+          word,
+          getJapaneseDisplay,
+          true,
+          settings,
+          l10n,
+        );
         break;
       case QuestionType.transToJapInput:
         prompt = word.translation;
@@ -151,20 +258,22 @@ class TrainingEngine {
       case QuestionType.transToJapConstructor:
         prompt = word.translation;
         correctAnswer = word.japanese;
-        
+
         final correctChars = word.japanese.split('');
         final extraCharsCount = min(6, correctChars.length);
         final extraChars = <String>[];
         final allChars = allWords.map((w) => w.japanese).join('').split('');
         allChars.shuffle(_random);
-        
+
         for (final c in allChars) {
-          if (!correctChars.contains(c) && !extraChars.contains(c) && c.trim().isNotEmpty) {
+          if (!correctChars.contains(c) &&
+              !extraChars.contains(c) &&
+              c.trim().isNotEmpty) {
             extraChars.add(c);
             if (extraChars.length >= extraCharsCount) break;
           }
         }
-        
+
         customOptions = [...correctChars, ...extraChars]..shuffle(_random);
         wrongOptions = [];
         break;
@@ -176,27 +285,42 @@ class TrainingEngine {
       case QuestionType.voiceToJapConstructor:
         prompt = ''; // Handled in UI
         correctAnswer = word.japanese;
-        
+
         final correctChars2 = word.japanese.split('');
         final extraCharsCount2 = min(6, correctChars2.length);
         final extraChars2 = <String>[];
         final allChars2 = allWords.map((w) => w.japanese).join('').split('');
         allChars2.shuffle(_random);
-        
+
         for (final c in allChars2) {
-          if (!correctChars2.contains(c) && !extraChars2.contains(c) && c.trim().isNotEmpty) {
+          if (!correctChars2.contains(c) &&
+              !extraChars2.contains(c) &&
+              c.trim().isNotEmpty) {
             extraChars2.add(c);
             if (extraChars2.length >= extraCharsCount2) break;
           }
         }
-        
+
         customOptions = [...correctChars2, ...extraChars2]..shuffle(_random);
         wrongOptions = [];
+        break;
+      case QuestionType.imageToJap:
+        prompt = ''; // Handled in UI
+        correctAnswer = getJapaneseDisplay(word);
+        wrongOptions = _getWrongOptions(
+          allWords,
+          word,
+          getJapaneseDisplay,
+          true,
+          settings,
+          l10n,
+        );
         break;
     }
 
     // Mix correct answer with wrong ones (if not already custom)
-    final options = customOptions ?? ([...wrongOptions, correctAnswer]..shuffle(_random));
+    final options =
+        customOptions ?? ([...wrongOptions, correctAnswer]..shuffle(_random));
 
     return Question(
       word: word,
@@ -222,10 +346,18 @@ class TrainingEngine {
   }
 
   /// Extracts 3 wrong options from other words in the list
-  List<String> _getWrongOptions(List<Word> allWords, Word targetWord, String? Function(Word) extractor, bool isTargetLanguage, Settings settings) {
+  List<String> _getWrongOptions(
+    List<Word> allWords,
+    Word targetWord,
+    String? Function(Word) extractor,
+    bool isTargetLanguage,
+    Settings settings,
+    AppLocalizations l10n,
+  ) {
     final correctValue = extractor(targetWord);
-    if (correctValue == null) return ["Ошибка 1", "Ошибка 2", "Ошибка 3"];
-
+    if (correctValue == null) {
+      return [l10n.error1, l10n.error2, l10n.error3];
+    }
     final possibleWords = allWords.where((w) {
       final val = extractor(w);
       return val != null && val.isNotEmpty && val != correctValue;
@@ -233,12 +365,15 @@ class TrainingEngine {
 
     Set<String> wrongValues = {};
     int attempts = 0;
-    
+
     // Pre-build or get cached confusable map
     final confusableMap = _getConfusableMap(settings.customConfusableGroups);
-    
+
     // Pre-sort by levenshtein if similar words are enabled
-    List<String> possibleValues = possibleWords.map((w) => extractor(w)!).toSet().toList();
+    List<String> possibleValues = possibleWords
+        .map((w) => extractor(w)!)
+        .toSet()
+        .toList();
     if (settings.useSimilarWordsForOptions) {
       // Cache levenshtein distances to avoid recalculating during sort
       final distances = <String, int>{};
@@ -252,23 +387,40 @@ class TrainingEngine {
 
     while (wrongValues.length < 3 && attempts < 50) {
       attempts++;
-      final option = _generateSingleWrongOption(correctValue, possibleValues, isTargetLanguage, settings, confusableMap, wrongValues.length);
-      if (option != null && option != correctValue && !wrongValues.contains(option)) {
+      final option = _generateSingleWrongOption(
+        correctValue,
+        possibleValues,
+        isTargetLanguage,
+        settings,
+        confusableMap,
+        wrongValues.length,
+      );
+      if (option != null &&
+          option != correctValue &&
+          !wrongValues.contains(option)) {
         wrongValues.add(option);
       }
     }
 
     // Fill with random strings if the dictionary is extremely small
     while (wrongValues.length < 3) {
-      wrongValues.add('Случайный вариант ${_random.nextInt(100)}');
+      //TODO: В таком случае сделать неправильные ответы одинаковыми или сократить количество вариантов.
+      wrongValues.add(l10n.randomOption(_random.nextInt(100).toString()));
     }
 
     return wrongValues.toList();
   }
 
-  String? _generateSingleWrongOption(String correctValue, List<String> possibleValues, bool isTargetLanguage, Settings settings, Map<String, List<String>> confusableMap, int indexToTake) {
+  String? _generateSingleWrongOption(
+    String correctValue,
+    List<String> possibleValues,
+    bool isTargetLanguage,
+    Settings settings,
+    Map<String, List<String>> confusableMap,
+    int indexToTake,
+  ) {
     bool useSpoil = false;
-    
+
     if (isTargetLanguage && settings.useSpoiledWordsForOptions) {
       if (settings.useSimilarWordsForOptions) {
         useSpoil = _random.nextBool();
@@ -284,9 +436,9 @@ class TrainingEngine {
 
     // Fallback to taking from possibleValues (which are already sorted by levenshtein or shuffled)
     if (indexToTake < possibleValues.length) {
-      return possibleValues[indexToTake]; 
+      return possibleValues[indexToTake];
     }
-    
+
     if (possibleValues.isNotEmpty) {
       return possibleValues[_random.nextInt(possibleValues.length)];
     }

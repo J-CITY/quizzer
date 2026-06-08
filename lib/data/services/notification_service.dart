@@ -1,6 +1,11 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:workmanager/workmanager.dart';
+import 'package:quizzer/utils/constants.dart';
 import 'database_service.dart';
+
+import 'dart:ui' as ui;
+import 'package:flutter/material.dart';
+import 'package:quizzer/l10n/app_localizations.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -17,9 +22,15 @@ void callbackDispatcher() {
     final currentMinutes = now.hour * 60 + now.minute;
 
     final fln = FlutterLocalNotificationsPlugin();
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings(AppConstants.notificationIcon);
     const initSettings = InitializationSettings(android: androidInit);
     await fln.initialize(settings: initSettings);
+
+    final locale = ui.PlatformDispatcher.instance.locale;
+    final targetLocale = AppLocalizations.supportedLocales.contains(Locale(locale.languageCode))
+        ? Locale(locale.languageCode)
+        : const Locale('en');
+    final l10n = lookupAppLocalizations(targetLocale);
 
     // Логика обычных уведомлений
     if (settings.notificationsEnabled) {
@@ -52,8 +63,8 @@ void callbackDispatcher() {
 
           await fln.show(
             id: 0,
-            title: 'Время тренировки!',
-            body: 'У вас $wordsToRepeat слов для повторения.',
+            title: l10n.notificationTrainingTitle,
+            body: l10n.notificationTrainingBody(wordsToRepeat.toString()),
             notificationDetails: details,
           );
         }
@@ -87,8 +98,8 @@ void callbackDispatcher() {
 
           await fln.show(
             id: 1,
-            title: '🔥 Ваш стрик может сгореть!',
-            body: 'Вы еще не тренировались сегодня. Зайдите в приложение, чтобы не потерять прогресс!',
+            title: l10n.notificationStreakTitle,
+            body: l10n.notificationStreakBody,
             notificationDetails: detailsStreak,
           );
         }
@@ -102,7 +113,7 @@ void callbackDispatcher() {
 class NotificationService {
   static Future<void> init() async {
     final fln = FlutterLocalNotificationsPlugin();
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings(AppConstants.notificationIcon);
     const initSettings = InitializationSettings(android: androidInit);
     await fln.initialize(settings: initSettings);
 

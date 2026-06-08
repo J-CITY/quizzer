@@ -27,12 +27,13 @@ class Settings {
   bool questionWordToReading = true;
   bool questionReadingToWord = true;
 
-  bool questionVoiceToTranslate = false;
-  bool questionVoiceToWord = false;
-  bool questionVoiceToWordInput = false;
-  bool questionVoiceToWordConstructor = false;
-  bool questionTranslateToWordInput = false;
-  bool questionTranslateToWordConstructor = false;
+  bool questionVoiceToTranslate = true;
+  bool questionVoiceToWord = true;
+  bool questionVoiceToWordInput = true;
+  bool questionVoiceToWordConstructor = true;
+  bool questionTranslateToWordInput = true;
+  bool questionTranslateToWordConstructor = true;
+  bool questionImageToWord = true;
 
   bool autoAdvanceToNextQuestion = true;
 

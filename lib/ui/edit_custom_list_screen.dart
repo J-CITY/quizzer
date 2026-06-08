@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/custom_list.dart';
 import '../data/services/database_service.dart';
 import '../data/services/google_sheets_service.dart';
+import 'widgets/settings_group.dart';
+import 'widgets/settings_tile.dart';
+import 'widgets/modern_text_field.dart';
 
 class EditCustomListScreen extends ConsumerStatefulWidget {
   final CustomList? customList; // If null, we are creating a new list
@@ -17,17 +20,34 @@ class EditCustomListScreen extends ConsumerStatefulWidget {
 
 class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
   late TextEditingController _nameController;
+  late TextEditingController _emojiController;
   late TextEditingController _sheetIdController;
   late TextEditingController _sheetTabNameController;
   String _language = 'ja-JP';
   bool _syncOnStartup = false;
   bool _isSaving = false;
 
+  bool _useCustomQuestionSettings = false;
+  bool _questionWordToTranslate = true;
+  bool _questionTranslateToWord = true;
+  bool _questionWordToReading = true;
+  bool _questionReadingToWord = true;
+  bool _questionVoiceToTranslate = true;
+  bool _questionVoiceToWord = true;
+  bool _questionVoiceToWordInput = true;
+  bool _questionVoiceToWordConstructor = true;
+  bool _questionTranslateToWordInput = true;
+  bool _questionTranslateToWordConstructor = true;
+  bool _questionImageToWord = true;
+
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(
       text: widget.customList?.name ?? '',
+    );
+    _emojiController = TextEditingController(
+      text: widget.customList?.emoji ?? '',
     );
     _sheetIdController = TextEditingController(
       text: widget.customList?.googleSheetId ?? '',
@@ -37,6 +57,18 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
     );
     _language = widget.customList?.language ?? 'ja-JP';
     _syncOnStartup = widget.customList?.syncOnStartup ?? false;
+    _useCustomQuestionSettings = widget.customList?.useCustomQuestionSettings ?? false;
+    _questionWordToTranslate = widget.customList?.questionWordToTranslate ?? true;
+    _questionTranslateToWord = widget.customList?.questionTranslateToWord ?? true;
+    _questionWordToReading = widget.customList?.questionWordToReading ?? true;
+    _questionReadingToWord = widget.customList?.questionReadingToWord ?? true;
+    _questionVoiceToTranslate = widget.customList?.questionVoiceToTranslate ?? true;
+    _questionVoiceToWord = widget.customList?.questionVoiceToWord ?? true;
+    _questionVoiceToWordInput = widget.customList?.questionVoiceToWordInput ?? true;
+    _questionVoiceToWordConstructor = widget.customList?.questionVoiceToWordConstructor ?? true;
+    _questionTranslateToWordInput = widget.customList?.questionTranslateToWordInput ?? true;
+    _questionTranslateToWordConstructor = widget.customList?.questionTranslateToWordConstructor ?? true;
+    _questionImageToWord = widget.customList?.questionImageToWord ?? true;
   }
 
   Future<void> _save() async {
@@ -77,6 +109,7 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
     final db = ref.read(databaseServiceProvider);
     final list = widget.customList ?? CustomList();
     list.name = name;
+    list.emoji = _emojiController.text.trim().isNotEmpty ? _emojiController.text.trim() : null;
     list.language = _language;
 
     if (sheetId.isNotEmpty) {
@@ -88,6 +121,19 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
       list.googleSheetTabName = null;
       list.syncOnStartup = false;
     }
+
+    list.useCustomQuestionSettings = _useCustomQuestionSettings;
+    list.questionWordToTranslate = _questionWordToTranslate;
+    list.questionTranslateToWord = _questionTranslateToWord;
+    list.questionWordToReading = _questionWordToReading;
+    list.questionReadingToWord = _questionReadingToWord;
+    list.questionVoiceToTranslate = _questionVoiceToTranslate;
+    list.questionVoiceToWord = _questionVoiceToWord;
+    list.questionVoiceToWordInput = _questionVoiceToWordInput;
+    list.questionVoiceToWordConstructor = _questionVoiceToWordConstructor;
+    list.questionTranslateToWordInput = _questionTranslateToWordInput;
+    list.questionTranslateToWordConstructor = _questionTranslateToWordConstructor;
+    list.questionImageToWord = _questionImageToWord;
 
     await db.saveCustomList(list);
 
@@ -129,76 +175,189 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
               ),
             )
           else
-            IconButton(icon: Icon(Icons.check), onPressed: _save),
+            IconButton(icon: const Icon(Icons.check), onPressed: _save),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: AppLocalizations.of(context)!.listNameLabel,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _sheetIdController,
-              decoration: InputDecoration(
-                labelText: AppLocalizations.of(context)!.settingsSheetId,
-                hintText: AppLocalizations.of(context)!.settingsSheetIdHint,
-                border: const OutlineInputBorder(),
-              ),
-              onChanged: (val) {
-                setState(() {});
-              },
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _sheetTabNameController,
-              decoration: const InputDecoration(
-                labelText: 'Имя листа (опционально)',
-                hintText: 'Например: Sheet1',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: _language,
-              decoration: InputDecoration(
-                labelText: 'Язык словаря (озвучка)',
-                border: const OutlineInputBorder(),
-              ),
-              items: [
-                DropdownMenuItem(value: 'ja-JP', child: Text('Японский (ja-JP)')),
-                DropdownMenuItem(value: 'en-US', child: Text('Английский (en-US)')),
-                DropdownMenuItem(value: 'es-ES', child: Text('Испанский (es-ES)')),
-                DropdownMenuItem(value: 'ru-RU', child: Text('Русский (ru-RU)')),
-                DropdownMenuItem(value: 'de-DE', child: Text('Немецкий (de-DE)')),
-                DropdownMenuItem(value: 'fr-FR', child: Text('Французский (fr-FR)')),
-                DropdownMenuItem(value: 'it-IT', child: Text('Итальянский (it-IT)')),
+            SettingsGroup(
+              title: AppLocalizations.of(context)!.listGroupMainInfo,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 80,
+                        child: ModernTextField(
+                          controller: _emojiController,
+                          labelText: 'Emoji',
+                          maxLength: 1,
+                          keyboardType: TextInputType.text,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ModernTextField(
+                          controller: _nameController,
+                          labelText: AppLocalizations.of(context)!.listNameLabel,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                SettingsTile(
+                  title: AppLocalizations.of(context)!.dictionaryLanguage,
+                  showDivider: false,
+                  trailing: DropdownButton<String>(
+                    value: _language,
+                    underline: const SizedBox(),
+                    items: [
+                      DropdownMenuItem(value: 'ja-JP', child: Text(AppLocalizations.of(context)!.langJapanese)),
+                      DropdownMenuItem(value: 'en-US', child: Text(AppLocalizations.of(context)!.langEnglish)),
+                      DropdownMenuItem(value: 'es-ES', child: Text(AppLocalizations.of(context)!.langSpanish)),
+                      DropdownMenuItem(value: 'ru-RU', child: Text(AppLocalizations.of(context)!.langRussian)),
+                      DropdownMenuItem(value: 'de-DE', child: Text(AppLocalizations.of(context)!.langGerman)),
+                      DropdownMenuItem(value: 'fr-FR', child: Text(AppLocalizations.of(context)!.langFrench)),
+                      DropdownMenuItem(value: 'it-IT', child: Text(AppLocalizations.of(context)!.langItalian)),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _language = val);
+                      }
+                    },
+                  ),
+                ),
               ],
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() => _language = val);
-                }
-              },
             ),
             const SizedBox(height: 16),
-            SwitchListTile(
-              title: Text(AppLocalizations.of(context)!.syncOnStartup),
-              value: _syncOnStartup,
-              onChanged: _sheetIdController.text.trim().isNotEmpty
-                  ? (val) {
-                      setState(() {
-                        _syncOnStartup = val;
-                      });
-                    }
-                  : null,
+            SettingsGroup(
+              title: AppLocalizations.of(context)!.listGroupSync,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    children: [
+                      ModernTextField(
+                        controller: _sheetIdController,
+                        labelText: AppLocalizations.of(context)!.settingsSheetId,
+                        hintText: AppLocalizations.of(context)!.settingsSheetIdHint,
+                        onChanged: (val) => setState(() {}),
+                      ),
+                      const SizedBox(height: 8),
+                      ModernTextField(
+                        controller: _sheetTabNameController,
+                        labelText: AppLocalizations.of(context)!.listNameOptional,
+                        hintText: AppLocalizations.of(context)!.exampleSheetName,
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                SettingsTile(
+                  title: AppLocalizations.of(context)!.syncOnStartup,
+                  showDivider: false,
+                  trailing: Switch(
+                    value: _syncOnStartup,
+                    onChanged: _sheetIdController.text.trim().isNotEmpty
+                        ? (val) {
+                            setState(() {
+                              _syncOnStartup = val;
+                            });
+                          }
+                        : null,
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 16),
+            SettingsGroup(
+              title: AppLocalizations.of(context)!.listGroupQuestions,
+              children: [
+                SettingsTile(
+                  title: AppLocalizations.of(context)!.overrideQuestionSettings,
+                  showDivider: _useCustomQuestionSettings,
+                  trailing: Switch(
+                    value: _useCustomQuestionSettings,
+                    onChanged: (val) {
+                      setState(() => _useCustomQuestionSettings = val);
+                    },
+                  ),
+                ),
+                if (_useCustomQuestionSettings) ...[
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionWordToTranslate),
+                    value: _questionWordToTranslate,
+                    onChanged: (val) => setState(() => _questionWordToTranslate = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionTranslateToWord),
+                    value: _questionTranslateToWord,
+                    onChanged: (val) => setState(() => _questionTranslateToWord = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionWordToReading),
+                    value: _questionWordToReading,
+                    onChanged: (val) => setState(() => _questionWordToReading = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionReadingToWord),
+                    value: _questionReadingToWord,
+                    onChanged: (val) => setState(() => _questionReadingToWord = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionVoiceToTranslate),
+                    value: _questionVoiceToTranslate,
+                    onChanged: (val) => setState(() => _questionVoiceToTranslate = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionVoiceToWord),
+                    value: _questionVoiceToWord,
+                    onChanged: (val) => setState(() => _questionVoiceToWord = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionVoiceToWordInput),
+                    value: _questionVoiceToWordInput,
+                    onChanged: (val) => setState(() => _questionVoiceToWordInput = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionVoiceToWordConstructor),
+                    value: _questionVoiceToWordConstructor,
+                    onChanged: (val) => setState(() => _questionVoiceToWordConstructor = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionTranslateToWordInput),
+                    value: _questionTranslateToWordInput,
+                    onChanged: (val) => setState(() => _questionTranslateToWordInput = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionTranslateToWordConstructor),
+                    value: _questionTranslateToWordConstructor,
+                    onChanged: (val) => setState(() => _questionTranslateToWordConstructor = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.questionImageToWord),
+                    value: _questionImageToWord,
+                    onChanged: (val) => setState(() => _questionImageToWord = val ?? true),
+                  ),
+                  Align(
+                    alignment: Alignment.center,
+                    child: TextButton(
+                      onPressed: () {
+                        setState(() => _useCustomQuestionSettings = false);
+                      },
+                      child: Text(AppLocalizations.of(context)!.resetToGeneralSettings),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ]
+              ],
+            ),
+            const SizedBox(height: 32),
           ],
         ),
       ),

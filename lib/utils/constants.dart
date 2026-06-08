@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
 
+class AppConstants {
+  static const String appName = 'Quizzer';
+  static const String dbName = 'quizzer.db';
+  static const String developerName = 'Daniil Glushchenko';
+  static const String developerEmail = 'daniil.glushchenko1995@gmail.com';
+  static const Duration audioAdvanceDelay = Duration(milliseconds: 500);
+  static const String notificationIcon = '@drawable/ic_launcher_foreground';
+}
+
 class AppColorsExtension extends ThemeExtension<AppColorsExtension> {
   final Color success;
   final Color chart;
   final Color border;
   final Color textSecondary;
   final Color textPrimary;
-  
+
   // Custom shades for UI
   final Color successBackground;
   final Color successText;
@@ -68,7 +77,11 @@ class AppColorsExtension extends ThemeExtension<AppColorsExtension> {
       border: Color.lerp(border, other.border, t)!,
       textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
       textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
-      successBackground: Color.lerp(successBackground, other.successBackground, t)!,
+      successBackground: Color.lerp(
+        successBackground,
+        other.successBackground,
+        t,
+      )!,
       successText: Color.lerp(successText, other.successText, t)!,
       errorBackground: Color.lerp(errorBackground, other.errorBackground, t)!,
       iconBlue: Color.lerp(iconBlue, other.iconBlue, t)!,
@@ -120,6 +133,12 @@ class AppTheme {
     extensions: [lightExtension],
     fontFamilyFallback: const ['Yu Gothic', 'Meiryo', 'Noto Sans JP'],
     useMaterial3: true,
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      centerTitle: true,
+      scrolledUnderElevation: 0,
+    ),
   );
 
   static final ThemeData darkTheme = ThemeData(
@@ -138,6 +157,12 @@ class AppTheme {
     extensions: [darkExtension],
     fontFamilyFallback: const ['Yu Gothic', 'Meiryo', 'Noto Sans JP'],
     useMaterial3: true,
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      centerTitle: true,
+      scrolledUnderElevation: 0,
+    ),
   );
 }
 

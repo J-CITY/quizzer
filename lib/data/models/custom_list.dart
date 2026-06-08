@@ -14,9 +14,26 @@ class CustomList {
 
   String language = 'ja-JP';
 
+  String? emoji;
+
   bool syncOnStartup = false;
 
   final words = IsarLinks<Word>();
   
   final learningQueue = IsarLinks<Word>();
+
+  bool useCustomQuestionSettings = false;
+
+  bool questionWordToTranslate = true;
+  bool questionTranslateToWord = true;
+  bool questionWordToReading = true;
+  bool questionReadingToWord = true;
+
+  bool questionVoiceToTranslate = true;
+  bool questionVoiceToWord = true;
+  bool questionVoiceToWordInput = true;
+  bool questionVoiceToWordConstructor = true;
+  bool questionTranslateToWordInput = true;
+  bool questionTranslateToWordConstructor = true;
+  bool questionImageToWord = true;
 }

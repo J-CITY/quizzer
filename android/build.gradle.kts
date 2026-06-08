@@ -24,18 +24,18 @@ tasks.register<Delete>("clean") {
 }
 
 subprojects {
-    if (project.name == "isar_flutter_libs") {
-        val config = {
-            val androidExt = project.extensions.findByName("android") as? com.android.build.gradle.LibraryExtension
-            if (androidExt != null) {
+    val config = {
+        val androidExt = project.extensions.findByName("android") as? com.android.build.gradle.LibraryExtension
+        if (androidExt != null) {
+            if (project.name == "isar_flutter_libs") {
                 androidExt.namespace = "dev.isar.isar_flutter_libs"
-                androidExt.compileSdk = 34
             }
+            androidExt.compileSdk = 36
         }
-        if (project.state.executed) {
-            config()
-        } else {
-            project.afterEvaluate { config() }
-        }
+    }
+    if (project.state.executed) {
+        config()
+    } else {
+        project.afterEvaluate { config() }
     }
 }

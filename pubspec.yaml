@@ -53,7 +53,9 @@ dependencies:
   auto_size_text: ^3.0.0
   material_symbols_icons: ^4.2928.1
   flutter_svg: ^2.3.0
-
+  file_picker: ^8.1.3
+  share_plus: ^12.0.2
+  confetti: ^0.8.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

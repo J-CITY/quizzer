@@ -17,6 +17,8 @@ class CustomList {
   String? emoji;
 
   bool syncOnStartup = false;
+  
+  bool isPinned = false;
 
   final words = IsarLinks<Word>();
   

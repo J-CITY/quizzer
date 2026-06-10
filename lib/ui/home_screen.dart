@@ -43,7 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(
           _currentIndex == 0
               ? AppLocalizations.of(context)!.statistics
-              : AppConstants.appName,
+              : AppLocalizations.of(context)!.wordLists,
         ),
         centerTitle: true,
         actions: [
@@ -66,9 +66,9 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
             BoxShadow(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+              blurRadius: 15,
+              offset: const Offset(0, -5),
             ),
           ],
         ),

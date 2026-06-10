@@ -42,7 +42,17 @@ class _CustomListsTabState extends ConsumerState<CustomListsTab> {
     return Scaffold(
       body: listsAsync.when(
         data: (lists) {
-          final filteredLists = lists.where((l) => l.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+          final filteredLists = lists
+              .where(
+                (l) =>
+                    l.name.toLowerCase().contains(_searchQuery.toLowerCase()),
+              )
+              .toList();
+          filteredLists.sort((a, b) {
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            return a.name.compareTo(b.name);
+          });
 
           return Column(
             children: [
@@ -52,7 +62,13 @@ class _CustomListsTabState extends ConsumerState<CustomListsTab> {
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: AppLocalizations.of(context)!.searchLists,
-                    prefixIcon: const Icon(Icons.search),
+                    hintStyle: TextStyle(
+                      color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary.withValues(alpha: 0.6),
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary.withValues(alpha: 0.6),
+                    ),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.clear),
@@ -85,9 +101,9 @@ class _CustomListsTabState extends ConsumerState<CustomListsTab> {
                           AppLocalizations.of(context)!.noCustomLists,
                           style: TextStyle(
                             fontSize: 16,
-                            color: Theme.of(context)
-                                .extension<AppColorsExtension>()!
-                                .textSecondary,
+                            color: Theme.of(
+                              context,
+                            ).extension<AppColorsExtension>()!.textSecondary,
                           ),
                         ),
                       )
@@ -97,11 +113,18 @@ class _CustomListsTabState extends ConsumerState<CustomListsTab> {
                           final list = filteredLists[index];
                           final wordsList = list.words.toList();
                           final total = wordsList.length;
-                          final learned = wordsList.where((w) => w.progress >= 5).length;
-                          final inProgress = wordsList.where((w) => w.progress > 0 && w.progress < 5).length;
+                          final learned = wordsList
+                              .where((w) => w.progress >= 5)
+                              .length;
+                          final inProgress = wordsList
+                              .where((w) => w.progress > 0 && w.progress < 5)
+                              .length;
 
                           return AcrylicCard(
-                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
                             child: ListTile(
                               leading: Text(
                                 list.emoji ?? '📚',
@@ -109,13 +132,18 @@ class _CustomListsTabState extends ConsumerState<CustomListsTab> {
                               ),
                               title: Text(
                                 list.name,
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    AppLocalizations.of(context)!.wordsCount(total.toString()),
+                                    AppLocalizations.of(
+                                      context,
+                                    )!.wordsCount(total.toString()),
                                   ),
                                   const SizedBox(height: 8),
                                   ThinProgressBar(
@@ -125,22 +153,46 @@ class _CustomListsTabState extends ConsumerState<CustomListsTab> {
                                   ),
                                 ],
                               ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.settings),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => EditCustomListScreen(customList: list),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: Icon(
+                                      list.isPinned
+                                          ? Icons.push_pin
+                                          : Icons.push_pin_outlined,
                                     ),
-                                  );
-                                },
+                                    color: list.isPinned ? primaryColor : null,
+                                    onPressed: () async {
+                                      final db = ref.read(
+                                        databaseServiceProvider,
+                                      );
+                                      list.isPinned = !list.isPinned;
+                                      await db.saveCustomList(list);
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.settings),
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => EditCustomListScreen(
+                                            customList: list,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
                               ),
                               onTap: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => CustomListDetailsScreen(customList: list),
+                                    builder: (_) => CustomListDetailsScreen(
+                                      customList: list,
+                                    ),
                                   ),
                                 );
                               },
@@ -161,16 +213,20 @@ class _CustomListsTabState extends ConsumerState<CustomListsTab> {
       ),
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 90.0),
-        child: GlowButton(
-          padding: const EdgeInsets.all(16),
-          borderRadius: 30,
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const EditCustomListScreen()),
-            );
-          },
-          child: const Icon(Icons.add, size: 32),
+        child: SizedBox(
+          width: 64,
+          height: 64,
+          child: GlowButton(
+            padding: EdgeInsets.zero,
+            borderRadius: 100,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const EditCustomListScreen()),
+              );
+            },
+            child: const Icon(Icons.add, size: 32),
+          ),
         ),
       ),
     );

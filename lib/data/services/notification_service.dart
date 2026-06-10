@@ -1,6 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:quizzer/utils/constants.dart';
+import 'dart:io';
 import 'database_service.dart';
 
 import 'dart:ui' as ui;
@@ -23,7 +24,12 @@ void callbackDispatcher() {
 
     final fln = FlutterLocalNotificationsPlugin();
     const androidInit = AndroidInitializationSettings(AppConstants.notificationIcon);
-    const initSettings = InitializationSettings(android: androidInit);
+    const windowsInit = WindowsInitializationSettings(
+      appName: 'Quizzer',
+      appUserModelId: 'com.pets.quizzer',
+      guid: '217d842b-6c4c-4286-90f6-281baf1ec202',
+    );
+    const initSettings = InitializationSettings(android: androidInit, windows: windowsInit);
     await fln.initialize(settings: initSettings);
 
     final locale = ui.PlatformDispatcher.instance.locale;
@@ -114,13 +120,22 @@ class NotificationService {
   static Future<void> init() async {
     final fln = FlutterLocalNotificationsPlugin();
     const androidInit = AndroidInitializationSettings(AppConstants.notificationIcon);
-    const initSettings = InitializationSettings(android: androidInit);
+    const windowsInit = WindowsInitializationSettings(
+      appName: 'Quizzer',
+      appUserModelId: 'com.pets.quizzer',
+      guid: '217d842b-6c4c-4286-90f6-281baf1ec202',
+    );
+    const initSettings = InitializationSettings(android: androidInit, windows: windowsInit);
     await fln.initialize(settings: initSettings);
 
-    await Workmanager().initialize(callbackDispatcher);
+    if (Platform.isAndroid || Platform.isIOS) {
+      await Workmanager().initialize(callbackDispatcher);
+    }
   }
 
   static Future<void> updateSchedule(int intervalMinutes) async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    
     await Workmanager().cancelByUniqueName('quizzer_notification');
     await Workmanager().registerPeriodicTask(
       'quizzer_notification',
@@ -130,6 +145,8 @@ class NotificationService {
   }
 
   static Future<void> cancelSchedule() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    
     await Workmanager().cancelByUniqueName('quizzer_notification');
   }
 

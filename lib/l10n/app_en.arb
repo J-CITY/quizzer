@@ -158,5 +158,10 @@
   "listGroupQuestions": "QUESTION SETTINGS",
   "settingsGroupAbout": "ABOUT APP",
   "contactDeveloper": "Contact developer",
-  "emailCopied": "Email copied to clipboard"
+  "emailCopied": "Email copied to clipboard",
+  "wordLists": "Word Lists",
+  "readyForPractice": "Ready for practice?",
+  "takeATrainingSession": "Take a 10-word training session",
+  "threeMinutes": "3 min",
+  "start": "Start"
 }

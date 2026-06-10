@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quizzer/l10n/app_localizations.dart';
@@ -440,16 +441,17 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                       clipBehavior: Clip.none,
                       children: [
                         Positioned(
-                          top: -10,
+                          top: -5,
+                          left: 48,
+                          right: 48,
                           child: Container(
-                            width: 150,
-                            height: 20,
+                            height: 30,
                             decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(100),
                               boxShadow: [
                                 BoxShadow(
-                                  color: primaryColor.withValues(alpha: 0.6),
-                                  blurRadius: 40,
-                                  spreadRadius: 10,
+                                  color: primaryColor.withValues(alpha: 0.4),
+                                  blurRadius: 30,
                                 ),
                               ],
                             ),
@@ -467,16 +469,37 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                               ),
                             ],
                           ),
-                          child: Card(
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              side: BorderSide(
-                                color: primaryColor.withOpacity(0.5),
-                                width: 1,
-                              ),
-                            ),
-                            child: Column(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  color: Theme.of(context).brightness == Brightness.dark 
+                                      ? Theme.of(context).colorScheme.surface 
+                                      : Colors.white.withValues(alpha: 0.8),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.08),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(20),
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        primaryColor.withValues(alpha: 0.1),
+                                        primaryColor.withValues(alpha: 0.0),
+                                      ],
+                                      stops: const [0.0, 0.4],
+                                    ),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                  child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 if (showImage)
@@ -597,7 +620,6 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                                                       q.word.translation,
                                                       style: TextStyle(
                                                         fontSize: showImage ? 16 : 20,
-                                                        color: Colors.white,
                                                         fontWeight: FontWeight.w500,
                                                       ),
                                                       textAlign: TextAlign.center,
@@ -636,7 +658,11 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                                     ],
                                   ),
                                 ),
-                              ],
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),

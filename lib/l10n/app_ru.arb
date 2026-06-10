@@ -159,5 +159,10 @@
   "listGroupQuestions": "НАСТРОЙКИ ВОПРОСОВ",
   "settingsGroupAbout": "О ПРИЛОЖЕНИИ",
   "contactDeveloper": "Связаться с разработчиком",
-  "emailCopied": "Почта скопирована в буфер обмена"
+  "emailCopied": "Почта скопирована в буфер обмена",
+  "wordLists": "Списки слов",
+  "readyForPractice": "Готовы к практике?",
+  "takeATrainingSession": "Пройдите тренировку из 10 слов",
+  "threeMinutes": "3 мин",
+  "start": "Начать"
 }

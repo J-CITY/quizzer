@@ -463,7 +463,13 @@ class _CustomListDetailsScreenState
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: AppLocalizations.of(context)!.searchWords,
-                prefixIcon: const Icon(Icons.search),
+                hintStyle: TextStyle(
+                  color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary.withValues(alpha: 0.6),
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary.withValues(alpha: 0.6),
+                ),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear),
@@ -507,6 +513,7 @@ class _CustomListDetailsScreenState
                   final isLearned = word.progress >= 5;
 
                 return AcrylicCard(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   color: _selectedWordIds.contains(word.id)
                       ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
                       : (isLearned ? Theme.of(context).extension<AppColorsExtension>()!.successBackground : null),
@@ -594,38 +601,47 @@ class _CustomListDetailsScreenState
       ],
     ),
       floatingActionButton: _mode == _ListMode.normal
-          ? GlowButton(
-              padding: const EdgeInsets.all(16),
-              borderRadius: 30,
-              onPressed: _startTraining,
-              child: const Icon(Icons.play_arrow, size: 32),
-            )
-          : GlowButton(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              borderRadius: 30,
-              onPressed: _selectedWordIds.isEmpty
-                  ? null
-                  : () {
-                      if (_mode == _ListMode.selectToDelete) {
-                        _deleteSelectedWords();
-                      } else {
-                        _addSelectedToAnotherList();
-                      }
-                    },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _mode == _ListMode.selectToDelete ? Icons.delete : Icons.add,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _mode == _ListMode.selectToDelete
-                        ? AppLocalizations.of(context)!.deleteBtn
-                        : AppLocalizations.of(context)!.addBtn,
-                  ),
-                ],
+          ? SizedBox(
+              width: 64,
+              height: 64,
+              child: GlowButton(
+                padding: EdgeInsets.zero,
+                borderRadius: 100,
+                onPressed: _startTraining,
+                child: const Icon(Icons.play_arrow, size: 32),
               ),
+            )
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GlowButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  borderRadius: 100,
+                  onPressed: _selectedWordIds.isEmpty
+                      ? null
+                      : () {
+                          if (_mode == _ListMode.selectToDelete) {
+                            _deleteSelectedWords();
+                          } else {
+                            _addSelectedToAnotherList();
+                          }
+                        },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _mode == _ListMode.selectToDelete ? Icons.delete : Icons.add,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _mode == _ListMode.selectToDelete
+                            ? AppLocalizations.of(context)!.deleteBtn
+                            : AppLocalizations.of(context)!.addBtn,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
     );
   }

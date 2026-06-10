@@ -10,8 +10,10 @@ import '../data/models/training_session.dart';
 import '../data/services/database_service.dart';
 import '../utils/lottie_color_shift.dart';
 import 'custom_list_details_screen.dart';
+import 'training_screen.dart';
 import '../utils/constants.dart';
 import 'widgets/acrylic_card.dart';
+import 'dart:math';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
@@ -78,7 +80,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
     Color targetColor = _getColorForStreak(currentStreak);
     String lottieJson = await LottieColorShift.shiftLottieHue(
-      'assets/fire.json',
+      'assets/fier.json',
       targetColor,
     );
 
@@ -121,6 +123,28 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     });
   }
 
+  void _startQuickTraining() {
+    if (_customLists.isEmpty) return;
+    final random = Random();
+    final list = _customLists[random.nextInt(_customLists.length)];
+    list.words.loadSync();
+    final words = list.words.toList();
+    if (words.isEmpty) return;
+    
+    final unlearned = words.where((w) => w.progress < 5).toList();
+    final isLearning = unlearned.isNotEmpty;
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TrainingScreen(
+          customListId: list.id,
+          isReviewMode: !isLearning,
+        ),
+      ),
+    ).then((_) => _loadData());
+  }
+
   Widget _buildBarChart() {
     final daysInMonth = DateUtils.getDaysInMonth(
       _selectedMonth.year,
@@ -143,7 +167,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     if (maxY < 5) maxY = 5;
 
     return SizedBox(
-      height: 200,
+      height: 140,
       child: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
@@ -254,6 +278,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     int total, {
     VoidCallback? onTap,
     bool showLegend = false,
+    bool wrapInCard = true,
   }) {
     final int unlearned = total - learned - inProgress;
 
@@ -268,7 +293,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     final bool allLearned = total > 0 && learned == total;
 
     final chartWidget = SizedBox(
-      height: 100,
+      height: showLegend ? 100 : null,
       width: showLegend ? 100 : double.infinity,
       child: Stack(
         alignment: Alignment.center,
@@ -321,34 +346,33 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       ),
     );
 
-    return GestureDetector(
-      onTap: onTap,
-      child: AcrylicCard(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+    final innerWidget = Padding(
+      padding: wrapInCard ? const EdgeInsets.all(12.0) : EdgeInsets.zero,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
               SizedBox(
-                height: 48,
+                height: 24,
                 child: Center(
-                  child: Text(
-                    title,
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 8),
               if (showLegend)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     chartWidget,
-                    const SizedBox(width: 32),
+                    const SizedBox(height: 16),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -381,10 +405,23 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   ],
                 )
               else
-                chartWidget,
+                Expanded(child: chartWidget),
             ],
           ),
-        ),
+    );
+
+    if (!wrapInCard) {
+      return GestureDetector(
+        onTap: onTap,
+        child: innerWidget,
+      );
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AcrylicCard(
+        margin: EdgeInsets.zero,
+        child: innerWidget,
       ),
     );
   }
@@ -412,109 +449,186 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         child: Column(
           children: [
             // Lottie Fire & Streak
-            SizedBox(
-              height: 200,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (_modifiedLottieJson != null)
-                    Lottie.memory(
-                      utf8.encode(_modifiedLottieJson!),
-                      repeat: false,
-                      width: 200,
-                      height: 200,
-                      fit: BoxFit.contain,
+            AcrylicCard(
+              margin: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 1,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_modifiedLottieJson != null)
+                            Lottie.memory(
+                              utf8.encode(_modifiedLottieJson!),
+                              repeat: false,
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.contain,
+                            )
+                          else
+                            const SizedBox(width: 80, height: 80),
+                          Text(
+                            '$_streak',
+                            style: TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).extension<AppColorsExtension>()!.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            AppLocalizations.of(context)!.daysInARow,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
                     ),
-                  Positioned(
-                    bottom: 30,
-                    child: Stack(
-                      children: [
-                        Text(
-                          '$_streak',
-                          style: TextStyle(
-                            fontSize: 72,
-                            fontWeight: FontWeight.bold,
-                            foreground: Paint()
-                              ..style = PaintingStyle.stroke
-                              ..strokeWidth = 4
-                              ..color = Theme.of(
-                                context,
-                              ).extension<AppColorsExtension>()!.textPrimary,
-                            shadows: [
-                              Shadow(
-                                color: Theme.of(context)
-                                    .extension<AppColorsExtension>()!
-                                    .textSecondary,
-                                blurRadius: 12,
-                                offset: Offset(2, 4),
+                    Container(
+                      height: 140,
+                      width: 1,
+                      color: Theme.of(context).dividerColor,
+                      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                    ),
+                    Expanded(
+                      flex: 1,
+                      child: _buildPieChart(
+                        AppLocalizations.of(context)!.tabAllWords,
+                        learnedWords,
+                        inProgressWords,
+                        totalWords,
+                        showLegend: true,
+                        wrapInCard: false,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Bar chart Card
+            AcrylicCard(
+              margin: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 40,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: months.length,
+                        itemBuilder: (context, i) {
+                          final m = months[i];
+                          final isSelected =
+                              m.year == _selectedMonth.year &&
+                              m.month == _selectedMonth.month;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            child: ChoiceChip(
+                              label: Text(
+                                '${m.month.toString().padLeft(2, '0')}.${m.year}',
+                              ),
+                              selected: isSelected,
+                              onSelected: (val) => _onMonthChanged(m),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildBarChart(),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Quick Training Card
+            AcrylicCard(
+              margin: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                      Colors.transparent,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: const EdgeInsets.all(20.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            AppLocalizations.of(context)!.readyForPractice,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            AppLocalizations.of(context)!.takeATrainingSession,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.access_time,
+                                size: 16,
+                                color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                AppLocalizations.of(context)!.threeMinutes,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary,
+                                ),
                               ),
                             ],
                           ),
-                        ),
-                        Text(
-                          '$_streak',
-                          style: TextStyle(
-                            fontSize: 72,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              AppLocalizations.of(context)!.daysInARow,
-              style: TextStyle(
-                fontSize: 18,
-                color: Theme.of(
-                  context,
-                ).extension<AppColorsExtension>()!.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 32),
-
-            // Months selector
-            SizedBox(
-              height: 40,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: months.length,
-                itemBuilder: (context, i) {
-                  final m = months[i];
-                  final isSelected =
-                      m.year == _selectedMonth.year &&
-                      m.month == _selectedMonth.month;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                    child: ChoiceChip(
-                      label: Text(
-                        '${m.month.toString().padLeft(2, '0')}.${m.year}',
+                        ],
                       ),
-                      selected: isSelected,
-                      onSelected: (val) => _onMonthChanged(m),
                     ),
-                  );
-                },
+                    const SizedBox(width: 16),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: _startQuickTraining,
+                      child: Text(AppLocalizations.of(context)!.start, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
 
-            // Bar chart
-            _buildBarChart(),
-            const SizedBox(height: 32),
 
-            // Overall Progress Pie Chart
-            _buildPieChart(
-              AppLocalizations.of(context)!.tabAllWords,
-              learnedWords,
-              inProgressWords,
-              totalWords,
-              showLegend: true,
-            ),
-            const SizedBox(height: 16),
 
             // Grid of Custom Lists Pie Charts
             GridView.builder(
@@ -522,9 +636,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                childAspectRatio: 0.85,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
+                childAspectRatio: 1.25,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
               ),
               itemCount: _customLists.length,
               itemBuilder: (context, i) {

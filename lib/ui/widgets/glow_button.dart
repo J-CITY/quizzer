@@ -18,7 +18,7 @@ class GlowButton extends StatefulWidget {
     this.padding = const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
     this.borderRadius = 16.0,
     this.isPrimary = true,
-    this.glowOpacity = 0.4,
+    this.glowOpacity = 0.25,
     this.width,
   }) : super(key: key);
 
@@ -80,8 +80,8 @@ class _GlowButtonState extends State<GlowButton>
     final bgGradient = widget.isPrimary
         ? LinearGradient(
             colors: [
-              Color.lerp(btnColor, Colors.white, 0.2) ?? btnColor,
-              Color.lerp(btnColor, Colors.black, 0.1) ?? btnColor,
+              Color.lerp(btnColor, Colors.white, 0.05) ?? btnColor,
+              Color.lerp(btnColor, Colors.black, 0.15) ?? btnColor,
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -105,6 +105,7 @@ class _GlowButtonState extends State<GlowButton>
           duration: const Duration(milliseconds: 200),
           padding: widget.padding,
           width: widget.width,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             gradient: bgGradient,
             borderRadius: BorderRadius.circular(widget.borderRadius),
@@ -118,8 +119,8 @@ class _GlowButtonState extends State<GlowButton>
                 ? [
                     BoxShadow(
                       color: btnColor.withValues(alpha: widget.glowOpacity),
-                      blurRadius: 20,
-                      spreadRadius: 2,
+                      blurRadius: 12,
+                      spreadRadius: 0,
                       offset: Offset.zero,
                     ),
                   ]
@@ -135,11 +136,7 @@ class _GlowButtonState extends State<GlowButton>
               data: IconThemeData(
                 color: widget.isPrimary ? Colors.white : btnColor,
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [widget.child],
-              ),
+              child: widget.child,
             ),
           ),
         ),

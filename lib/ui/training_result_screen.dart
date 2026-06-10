@@ -58,48 +58,9 @@ class _TrainingResultScreenState extends ConsumerState<TrainingResultScreen> {
         children: [
           if (widget.mistakes.isEmpty)
             Expanded(
-              child: Stack(
-                alignment: Alignment.center,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Align(
-                    alignment: const Alignment(0.0, 0.3),
-                    child: ConfettiWidget(
-                      confettiController: _confettiController,
-                      blastDirection: -3.14159 / 2, // Upwards
-                      maxBlastForce: 80,
-                      minBlastForce: 20,
-                      emissionFrequency: 0.02,
-                      numberOfParticles: 3,
-                      gravity: 0.1,
-                    ),
-                  ),
-                  Align(
-                    alignment: const Alignment(0.0, 0.3),
-                    child: ConfettiWidget(
-                      confettiController: _confettiController,
-                      blastDirection: -3.14159 / 2 - 0.5, // Slightly Left
-                      maxBlastForce: 80,
-                      minBlastForce: 20,
-                      emissionFrequency: 0.02,
-                      numberOfParticles: 2,
-                      gravity: 0.1,
-                    ),
-                  ),
-                  Align(
-                    alignment: const Alignment(0.0, 0.3),
-                    child: ConfettiWidget(
-                      confettiController: _confettiController,
-                      blastDirection: -3.14159 / 2 + 0.5, // Slightly Right
-                      maxBlastForce: 80,
-                      minBlastForce: 20,
-                      emissionFrequency: 0.02,
-                      numberOfParticles: 2,
-                      gravity: 0.1,
-                    ),
-                  ),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
                       const Spacer(flex: 2),
                       Text(
                         AppLocalizations.of(context)!.trainingResultsPerfect,
@@ -110,31 +71,64 @@ class _TrainingResultScreenState extends ConsumerState<TrainingResultScreen> {
                         textAlign: TextAlign.center,
                       ),
                       const Spacer(flex: 1),
-                      RippleAnimation(
-                        color: primaryColor,
-                        minRadius: 80,
-                        ripplesCount: 4,
-                        duration: const Duration(seconds: 2),
-                        child: Container(
-                          width: 160,
-                          height: 160,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
+                      Stack(
+                        alignment: Alignment.center,
+                        clipBehavior: Clip.none,
+                        children: [
+                          ConfettiWidget(
+                            confettiController: _confettiController,
+                            blastDirection: -3.14159 / 2, // Upwards
+                            maxBlastForce: 80,
+                            minBlastForce: 20,
+                            emissionFrequency: 0.02,
+                            numberOfParticles: 3,
+                            gravity: 0.1,
+                          ),
+                          ConfettiWidget(
+                            confettiController: _confettiController,
+                            blastDirection: -3.14159 / 2 - 0.5, // Slightly Left
+                            maxBlastForce: 80,
+                            minBlastForce: 20,
+                            emissionFrequency: 0.02,
+                            numberOfParticles: 2,
+                            gravity: 0.1,
+                          ),
+                          ConfettiWidget(
+                            confettiController: _confettiController,
+                            blastDirection: -3.14159 / 2 + 0.5, // Slightly Right
+                            maxBlastForce: 80,
+                            minBlastForce: 20,
+                            emissionFrequency: 0.02,
+                            numberOfParticles: 2,
+                            gravity: 0.1,
+                          ),
+                          RippleAnimation(
                             color: primaryColor,
-                            boxShadow: [
-                              BoxShadow(
-                                color: primaryColor.withValues(alpha: 0.6),
-                                blurRadius: 30,
-                                spreadRadius: 5,
+                            minRadius: 80,
+                            ripplesCount: 4,
+                            duration: const Duration(seconds: 2),
+                            child: Container(
+                              width: 160,
+                              height: 160,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: primaryColor,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: primaryColor.withValues(alpha: 0.6),
+                                    blurRadius: 30,
+                                    spreadRadius: 5,
+                                  ),
+                                ],
                               ),
-                            ],
+                              child: Icon(
+                                Icons.check,
+                                size: 80,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
-                          child: Icon(
-                            Icons.check,
-                            size: 80,
-                            color: Colors.white,
-                          ),
-                        ),
+                        ],
                       ),
                       const SizedBox(height: 48),
                       AcrylicCard(
@@ -163,8 +157,6 @@ class _TrainingResultScreenState extends ConsumerState<TrainingResultScreen> {
                       const Spacer(flex: 3),
                     ],
                   ),
-                ],
-              ),
             )
           else ...[
             Padding(
@@ -253,14 +245,23 @@ class _TrainingResultScreenState extends ConsumerState<TrainingResultScreen> {
             padding: const EdgeInsets.all(24.0),
             child: SizedBox(
               width: double.infinity,
-              child: GlowButton(
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  elevation: 0,
+                ),
                 onPressed: () {
                   // Navigate back to the home screen
                   Navigator.of(context).popUntil((route) => route.isFirst);
                 },
                 child: Text(
                   AppLocalizations.of(context)!.close,
-                  style: TextStyle(fontSize: 18),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
             ),

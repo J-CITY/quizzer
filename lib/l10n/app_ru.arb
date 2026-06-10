@@ -162,7 +162,7 @@
   "emailCopied": "Почта скопирована в буфер обмена",
   "wordLists": "Списки слов",
   "readyForPractice": "Готовы к практике?",
-  "takeATrainingSession": "Пройдите тренировку из 10 слов",
-  "threeMinutes": "3 мин",
+  "takeATrainingSession": "Пройдите тренировку",
+  "threeMinutes": "5 мин",
   "start": "Начать"
 }

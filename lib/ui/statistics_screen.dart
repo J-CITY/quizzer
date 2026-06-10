@@ -537,6 +537,14 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                               ),
                               selected: isSelected,
                               onSelected: (val) => _onMonthChanged(m),
+                              selectedColor: Theme.of(context).colorScheme.primary,
+                              showCheckmark: false,
+                              labelStyle: TextStyle(
+                                color: isSelected
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.onSurface,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              ),
                             ),
                           );
                         },

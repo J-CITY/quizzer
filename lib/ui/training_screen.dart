@@ -1037,15 +1037,16 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
         Color? buttonColor;
         Color? textColor;
 
+        bool isPrimary = false;
         if (hasAnswered) {
           if (option == q.correctAnswer) {
             buttonColor = Theme.of(
               context,
             ).extension<AppColorsExtension>()!.success;
-            textColor = Colors.white;
+            textColor = buttonColor;
           } else if (option == selectedOption) {
             buttonColor = Theme.of(context).colorScheme.error;
-            textColor = Colors.white;
+            textColor = buttonColor;
           }
         }
 
@@ -1053,7 +1054,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: GlowButton(
             color: buttonColor ?? Theme.of(context).colorScheme.surface,
-            isPrimary: buttonColor != null,
+            isPrimary: isPrimary,
             padding: const EdgeInsets.all(20),
             borderRadius: 12,
             width: double.infinity,

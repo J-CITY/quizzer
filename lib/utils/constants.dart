@@ -117,6 +117,19 @@ class AppTheme {
     buttonDisabled: Colors.grey.shade700,
   );
 
+  static const TextTheme _appTextTheme = TextTheme(
+    displayLarge: TextStyle(fontWeight: FontWeight.w700),
+    displayMedium: TextStyle(fontWeight: FontWeight.w700),
+    displaySmall: TextStyle(fontWeight: FontWeight.w700),
+    headlineLarge: TextStyle(fontWeight: FontWeight.w700),
+    headlineMedium: TextStyle(fontWeight: FontWeight.w700),
+    headlineSmall: TextStyle(fontWeight: FontWeight.w700),
+    titleLarge: TextStyle(fontWeight: FontWeight.w700),
+    titleMedium: TextStyle(fontWeight: FontWeight.w600),
+    titleSmall: TextStyle(fontWeight: FontWeight.w600),
+    labelLarge: TextStyle(fontWeight: FontWeight.w600),
+  );
+
   static final ThemeData lightTheme = ThemeData(
     brightness: Brightness.light,
     scaffoldBackgroundColor: const Color(0xFFF7F8FC),
@@ -132,23 +145,32 @@ class AppTheme {
     ),
     extensions: [lightExtension],
     fontFamilyFallback: const ['Yu Gothic', 'Meiryo', 'Noto Sans JP'],
+    textTheme: _appTextTheme.apply(
+      bodyColor: const Color(0xFF111827),
+      displayColor: const Color(0xFF111827),
+    ),
     useMaterial3: true,
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.transparent,
       elevation: 0,
       centerTitle: true,
       scrolledUnderElevation: 0,
+      titleTextStyle: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF111827),
+      ),
     ),
   );
 
   static final ThemeData darkTheme = ThemeData(
     brightness: Brightness.dark,
-    scaffoldBackgroundColor: const Color(0xFF0B1020),
+    scaffoldBackgroundColor: const Color(0xFF0D0D15),
     colorScheme: const ColorScheme.dark(
       primary: Color(0xFF7C6CFF),
       secondary: Color(0xFF60A5FA),
       error: Color(0xFFF87171),
-      surface: Color(0xFF1E293B),
+      surface: Color(0xFF161622),
       onPrimary: Colors.white,
       onSecondary: Colors.white,
       onSurface: Color(0xFFF8FAFC),
@@ -156,12 +178,21 @@ class AppTheme {
     ),
     extensions: [darkExtension],
     fontFamilyFallback: const ['Yu Gothic', 'Meiryo', 'Noto Sans JP'],
+    textTheme: _appTextTheme.apply(
+      bodyColor: const Color(0xFFF8FAFC),
+      displayColor: const Color(0xFFF8FAFC),
+    ),
     useMaterial3: true,
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.transparent,
       elevation: 0,
       centerTitle: true,
       scrolledUnderElevation: 0,
+      titleTextStyle: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFFF8FAFC),
+      ),
     ),
   );
 }

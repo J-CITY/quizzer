@@ -110,18 +110,20 @@ class _GlowButtonState extends State<GlowButton>
             gradient: bgGradient,
             borderRadius: BorderRadius.circular(widget.borderRadius),
             border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.1)
-                  : Colors.black.withValues(alpha: 0.05),
+              color: (!widget.isPrimary && widget.color != null)
+                  ? btnColor.withValues(alpha: 0.4)
+                  : (isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : btnColor.withValues(alpha: 0.08)),
               width: 1,
             ),
             boxShadow: (widget.isPrimary && !isDisabled)
                 ? [
                     BoxShadow(
                       color: btnColor.withValues(alpha: widget.glowOpacity),
-                      blurRadius: 12,
-                      spreadRadius: 0,
-                      offset: Offset.zero,
+                      blurRadius: 24,
+                      spreadRadius: -2,
+                      offset: const Offset(0, 8),
                     ),
                   ]
                 : null,

@@ -108,6 +108,13 @@ class GoogleSheetsService {
             }
           }
 
+          if (row.length >= 6) {
+            final mnemonicStr = row[5].toString().trim();
+            if (mnemonicStr.isNotEmpty) {
+              word.mnemonic = mnemonicStr;
+            }
+          }
+
           words.add(word);
         } catch (e) {
           // Skip rows that have unparseable ID or other errors

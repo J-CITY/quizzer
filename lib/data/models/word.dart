@@ -17,6 +17,8 @@ class Word {
 
   String? imageUrl;
 
+  String? mnemonic;
+
   int progress = 0; // 0 to 5
 
   DateTime? lastTrained;

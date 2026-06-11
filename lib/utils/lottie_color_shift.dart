@@ -87,9 +87,18 @@ class LottieColorShift {
       return; 
     }
 
-    double newHue = (hsl.hue + hueShift) % 360.0;
-    if (newHue < 0) newHue += 360.0;
+    // В оригинальной анимации огня есть красные (Hue ~0) и желтые (Hue ~60) цвета.
+    // Если мы просто прибавляем hueShift, то при целевом оранжевом цвете (Hue ~35)
+    // желтые части огня смещаются в зеленую зону (60 + 35 = 95).
+    // Поэтому мы просто задаем всем цветным элементам целевой оттенок, 
+    // сохраняя оригинальную яркость и насыщенность.
+    
+    // Получаем целевой цвет из targetHsl (который мы можем передать через статику или заново получить)
+    // Так как нам доступен только hueShift и baseColor, мы можем восстановить targetHue:
+    double targetHue = (baseColor.hue + hueShift) % 360.0;
+    if (targetHue < 0) targetHue += 360.0;
 
+    double newHue = targetHue;
     double newSat = (hsl.saturation * satScale).clamp(0.0, 1.0);
 
     HSLColor newHsl = hsl.withHue(newHue).withSaturation(newSat);

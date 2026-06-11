@@ -12,6 +12,8 @@ import '../utils/constants.dart';
 import 'widgets/acrylic_card.dart';
 import 'widgets/glow_button.dart';
 import 'widgets/progress_bar.dart';
+import 'edit_custom_list_screen.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class CustomListDetailsScreen extends ConsumerStatefulWidget {
   final CustomList customList;
@@ -120,17 +122,8 @@ class _CustomListDetailsScreenState
         )
         .toList();
 
-    if (localLists.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.noLocalLists)),
-        );
-      }
-      return;
-    }
-
     if (!mounted) return;
-    final selectedList = await showDialog<CustomList>(
+    final selectedList = await showDialog<dynamic>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -139,8 +132,15 @@ class _CustomListDetailsScreenState
             width: double.maxFinite,
             child: ListView.builder(
               shrinkWrap: true,
-              itemCount: localLists.length,
+              itemCount: localLists.length + 1,
               itemBuilder: (context, i) {
+                if (i == localLists.length) {
+                  return ListTile(
+                    leading: const Icon(Icons.add),
+                    title: Text(AppLocalizations.of(context)!.createLocalList),
+                    onTap: () => Navigator.pop(context, 'create'),
+                  );
+                }
                 final l = localLists[i];
                 return ListTile(
                   title: Text(l.name),
@@ -153,7 +153,17 @@ class _CustomListDetailsScreenState
       },
     );
 
-    if (selectedList != null) {
+    if (selectedList == 'create') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const EditCustomListScreen(isLocalOnly: true),
+        ),
+      );
+      return;
+    }
+
+    if (selectedList != null && selectedList is CustomList) {
       final wordsToAdd = widget.customList.words
           .where((w) => _selectedWordIds.contains(w.id))
           .toList();
@@ -193,13 +203,16 @@ class _CustomListDetailsScreenState
               if (word.imageUrl != null && word.imageUrl!.isNotEmpty) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    word.imageUrl!,
+                  child: CachedNetworkImage(
+                    imageUrl: word.imageUrl!,
                     width: double.infinity,
                     height: 200,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const Center(child: Icon(Icons.broken_image, size: 48, color: Colors.grey)),
+                    placeholder: (context, url) => const SizedBox(
+                      height: 200,
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (context, url, error) => const Center(child: Icon(Icons.broken_image, size: 48, color: Colors.grey)),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -254,6 +267,13 @@ class _CustomListDetailsScreenState
                 AppLocalizations.of(context)!.wordTranslation(word.translation),
                 style: TextStyle(fontSize: 20),
               ),
+              if (word.mnemonic != null && word.mnemonic!.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text(
+                  AppLocalizations.of(context)!.wordMnemonic(word.mnemonic!),
+                  style: TextStyle(fontSize: 18, color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary),
+                ),
+              ],
               const SizedBox(height: 24),
               Text(
                 AppLocalizations.of(
@@ -384,8 +404,17 @@ class _CustomListDetailsScreenState
         widget.customList.googleSheetId != null &&
         widget.customList.googleSheetId!.isNotEmpty;
     final primaryColor = Theme.of(context).colorScheme.primary;
-    return Scaffold(
-      appBar: AppBar(
+    return PopScope(
+      canPop: _mode == _ListMode.normal,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        setState(() {
+          _mode = _ListMode.normal;
+          _selectedWordIds.clear();
+        });
+      },
+      child: Scaffold(
+        appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface.withOpacity(0.5),
         elevation: 0,
         flexibleSpace: ClipRRect(
@@ -611,38 +640,53 @@ class _CustomListDetailsScreenState
                 child: const Icon(Icons.play_arrow, size: 32),
               ),
             )
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GlowButton(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  borderRadius: 100,
-                  onPressed: _selectedWordIds.isEmpty
-                      ? null
-                      : () {
-                          if (_mode == _ListMode.selectToDelete) {
-                            _deleteSelectedWords();
-                          } else {
-                            _addSelectedToAnotherList();
-                          }
-                        },
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _mode == _ListMode.selectToDelete ? Icons.delete : Icons.add,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _mode == _ListMode.selectToDelete
-                            ? AppLocalizations.of(context)!.deleteBtn
-                            : AppLocalizations.of(context)!.addBtn,
-                      ),
-                    ],
+          : SizedBox(
+              height: 56,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GlowButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    borderRadius: 100,
+                    isPrimary: false,
+                    onPressed: () => setState(() {
+                      _mode = _ListMode.normal;
+                      _selectedWordIds.clear();
+                    }),
+                    child: Text(AppLocalizations.of(context)!.cancel),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 16),
+                  GlowButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    borderRadius: 100,
+                    onPressed: _selectedWordIds.isEmpty
+                        ? null
+                        : () {
+                            if (_mode == _ListMode.selectToDelete) {
+                              _deleteSelectedWords();
+                            } else {
+                              _addSelectedToAnotherList();
+                            }
+                          },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _mode == _ListMode.selectToDelete ? Icons.delete : Icons.add,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _mode == _ListMode.selectToDelete
+                              ? AppLocalizations.of(context)!.deleteBtn
+                              : AppLocalizations.of(context)!.addBtn,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-    );
+    ),
+  );
   }
 }

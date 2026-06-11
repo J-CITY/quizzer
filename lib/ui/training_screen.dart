@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:auto_size_text/auto_size_text.dart';
+import 'package:isar/isar.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../data/models/word.dart';
 import '../domain/training_engine.dart';
 import '../data/services/database_service.dart';
@@ -122,16 +124,18 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   Future<void> _playVoiceOnAppearIfNeeded() async {
     if (_questions.isEmpty || _currentIndex >= _questions.length) return;
     final q = _questions[_currentIndex];
+    final bool hasAnswered = _userAnswers.containsKey(_currentIndex);
 
     final settings = await ref.read(databaseServiceProvider).getSettings();
     if (settings.autoPlayVoice ||
         q.type == QuestionType.voiceToTrans ||
         q.type == QuestionType.voiceToJap) {
-      // Do not play if the prompt is translation (types 3, 6, 7) or image (type 10)
-      if (q.type == QuestionType.transToJap ||
-          q.type == QuestionType.transToJapInput ||
-          q.type == QuestionType.transToJapConstructor ||
-          q.type == QuestionType.imageToJap) {
+      // Do not play if the prompt is translation (types 3, 6, 7) or image (type 10) AND not answered
+      if (!hasAnswered &&
+          (q.type == QuestionType.transToJap ||
+              q.type == QuestionType.transToJapInput ||
+              q.type == QuestionType.transToJapConstructor ||
+              q.type == QuestionType.imageToJap)) {
         return;
       }
 
@@ -147,6 +151,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
         ? q.word.reading!
         : q.word.japanese;
 
+    await ref.read(ttsProvider).stop();
     await ref.read(ttsProvider).speak(textToSpeak);
   }
 
@@ -172,6 +177,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     }
 
     if (settings.playSoundEffects) {
+      await _audioPlayer.stop();
       if (isCorrect) {
         await _audioPlayer.play(AssetSource('sounds/true.mp3'));
       } else {
@@ -509,11 +515,14 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                                       borderRadius: const BorderRadius.vertical(
                                         top: Radius.circular(20),
                                       ),
-                                      child: Image.network(
-                                        q.word.imageUrl!,
+                                      child: CachedNetworkImage(
+                                        imageUrl: q.word.imageUrl!,
                                         fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (context, error, stackTrace) =>
+                                        placeholder: (context, url) => const Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                        errorWidget:
+                                            (context, url, error) =>
                                                 const Center(
                                                   child: Icon(
                                                     Icons.broken_image,
@@ -825,10 +834,11 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
+        if (!hasAnswered)
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
                 controller: _textController,
                 enabled: !hasAnswered,
                 decoration: InputDecoration(
@@ -926,22 +936,61 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
         .map((i) => q.options[i])
         .join('');
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            constructedWord.isEmpty ? " " : constructedWord,
-            style: TextStyle(fontSize: 24),
-            textAlign: TextAlign.center,
-          ),
-        ),
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!hasAnswered) ...[
+            Container(
+              height: 70,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: _selectedCharIndices.isEmpty
+                  ? const Center(child: Text(" ", style: TextStyle(fontSize: 24)))
+                  : Theme(
+                      data: Theme.of(context).copyWith(
+                        canvasColor: Colors.transparent,
+                      ),
+                      child: ReorderableListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        buildDefaultDragHandles: false,
+                        itemCount: _selectedCharIndices.length,
+                        onReorder: (oldIndex, newIndex) {
+                          setState(() {
+                            if (oldIndex < newIndex) {
+                              newIndex -= 1;
+                            }
+                            final item = _selectedCharIndices.removeAt(oldIndex);
+                            _selectedCharIndices.insert(newIndex, item);
+                          });
+                        },
+                        itemBuilder: (context, index) {
+                          final charIndex = _selectedCharIndices[index];
+                          final char = q.options[charIndex];
+                          return ReorderableDragStartListener(
+                            key: ValueKey('chip_${charIndex}_$index'),
+                            index: index,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                              child: InputChip(
+                                label: Text(char, style: const TextStyle(fontSize: 20)),
+                                onDeleted: () {
+                                  setState(() {
+                                    _selectedCharIndices.removeAt(index);
+                                  });
+                                },
+                                deleteIcon: const Icon(Icons.close, size: 18),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+            ),
         const SizedBox(height: 16),
         Wrap(
           spacing: 8,
@@ -982,6 +1031,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
             style: TextStyle(fontSize: 18),
           ),
         ),
+        ],
         if (hasAnswered)
           Padding(
             padding: const EdgeInsets.only(top: 16.0),
@@ -1021,6 +1071,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
             ),
           ),
       ],
+    ),
     );
   }
 

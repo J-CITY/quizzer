@@ -144,7 +144,7 @@
   "resetToGeneralSettings": "Reset to general settings",
   "searchLists": "Search lists...",
   "searchWords": "Search words...",
-  "trainingResultsMotivation": "Mistakes are stepping stones to knowledge! Try again.",
+  "trainingResultsMotivation": "Mistakes are stepping stones to knowledge!",
   "statLearned": "Learned",
   "statInProgress": "In progress",
   "statMistakes": "Mistakes",
@@ -163,5 +163,15 @@
   "readyForPractice": "Ready for practice?",
   "takeATrainingSession": "Take a training session",
   "threeMinutes": "5 min",
-  "start": "Start"
+  "start": "Start",
+  "wordMnemonic": "Mnemonic: {mnemonic}",
+  "@wordMnemonic": { "placeholders": { "mnemonic": { "type": "String" } } },
+  "sheetFormatHintTitle": "Sheet Format (Insert table id)",
+  "sheetFormatHintDesc": "Sheet name format: [language] Sheet name\nExample: [ja-JP] Kanji\n\nInsert only the table ID.\nColumn A must contain unique numbers.\nThe table should be available via link.\n\nColumns:\nA: ID (number)\nB: Word\nC: Reading\nD: Translation\nE: Image (URL)\nF: Mnemonic",
+  "confusableFormatHintTitle": "Sheet Format (Insert table id)",
+  "confusableFormatHintDesc": "A: Characters (no spaces, e.g., 一二三)",
+  "createLocalList": "Create local list",
+  "settingsGroupStorage": "STORAGE",
+  "clearImageCache": "Clear image cache",
+  "imageCacheCleared": "Image cache cleared successfully"
 }

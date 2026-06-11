@@ -184,6 +184,7 @@ class ProfileService {
       'useSpoiledWordsForOptions': settings.useSpoiledWordsForOptions,
       'confusableCharactersSheetId': settings.confusableCharactersSheetId,
       'customConfusableGroups': settings.customConfusableGroups,
+      'questionImageToWord': settings.questionImageToWord,
     };
   }
 
@@ -213,7 +214,8 @@ class ProfileService {
       ..useSimilarWordsForOptions = map['useSimilarWordsForOptions'] ?? false
       ..useSpoiledWordsForOptions = map['useSpoiledWordsForOptions'] ?? false
       ..confusableCharactersSheetId = map['confusableCharactersSheetId']
-      ..customConfusableGroups = (map['customConfusableGroups'] as List?)?.cast<String>() ?? [];
+      ..customConfusableGroups = (map['customConfusableGroups'] as List?)?.cast<String>() ?? []
+      ..questionImageToWord = map['questionImageToWord'] ?? true;
   }
 
   static Map<String, dynamic> _customListToJson(CustomList list) {
@@ -237,6 +239,9 @@ class ProfileService {
       'questionVoiceToWordConstructor': list.questionVoiceToWordConstructor,
       'questionTranslateToWordInput': list.questionTranslateToWordInput,
       'questionTranslateToWordConstructor': list.questionTranslateToWordConstructor,
+      'emoji': list.emoji,
+      'isPinned': list.isPinned,
+      'questionImageToWord': list.questionImageToWord,
     };
   }
 
@@ -257,7 +262,10 @@ class ProfileService {
       ..questionVoiceToWordInput = map['questionVoiceToWordInput'] ?? true
       ..questionVoiceToWordConstructor = map['questionVoiceToWordConstructor'] ?? true
       ..questionTranslateToWordInput = map['questionTranslateToWordInput'] ?? true
-      ..questionTranslateToWordConstructor = map['questionTranslateToWordConstructor'] ?? true;
+      ..questionTranslateToWordConstructor = map['questionTranslateToWordConstructor'] ?? true
+      ..emoji = map['emoji']
+      ..isPinned = map['isPinned'] ?? false
+      ..questionImageToWord = map['questionImageToWord'] ?? true;
   }
 
   static Map<String, dynamic> _wordToJson(Word word) {
@@ -267,6 +275,8 @@ class ProfileService {
       'japanese': word.japanese,
       'reading': word.reading,
       'translation': word.translation,
+      'imageUrl': word.imageUrl,
+      'mnemonic': word.mnemonic,
       'progress': word.progress,
       'lastTrained': word.lastTrained?.toIso8601String(),
     };
@@ -278,6 +288,8 @@ class ProfileService {
       ..japanese = map['japanese'] ?? ''
       ..reading = map['reading']
       ..translation = map['translation'] ?? ''
+      ..imageUrl = map['imageUrl']
+      ..mnemonic = map['mnemonic']
       ..progress = map['progress'] ?? 0
       ..lastTrained = map['lastTrained'] != null ? DateTime.tryParse(map['lastTrained']) : null;
   }

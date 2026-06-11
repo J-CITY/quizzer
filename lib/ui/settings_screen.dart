@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import '../data/services/database_service.dart';
 import '../data/models/settings.dart' as app;
 import '../data/services/google_sheets_service.dart';
@@ -9,6 +10,7 @@ import '../data/services/notification_service.dart';
 import '../utils/constants.dart';
 import '../ui/widgets/settings_group.dart';
 import '../ui/widgets/settings_tile.dart';
+import '../data/services/profile_service.dart';
 
 final settingsProvider = FutureProvider.autoDispose<app.Settings>((ref) async {
   return ref.watch(databaseServiceProvider).getSettings();
@@ -338,8 +340,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     title: AppLocalizations.of(context)!.settingsConfusableSheet,
                     subtitle: settings.confusableCharactersSheetId?.isEmpty ?? true ? AppLocalizations.of(context)!.notSet : settings.confusableCharactersSheetId,
                     showDivider: false,
-                    trailing: IconButton(
-                      icon: const Icon(Icons.sync),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.info_outline),
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: Text(AppLocalizations.of(context)!.confusableFormatHintTitle),
+                                content: Text(AppLocalizations.of(context)!.confusableFormatHintDesc),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.sync),
                       onPressed: () async {
                         if (settings.confusableCharactersSheetId == null || settings.confusableCharactersSheetId!.isEmpty) {
                           // Allow editing if empty
@@ -384,6 +407,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           }
                         }
                       },
+                    ),
+                    ],
                     ),
                     onTap: () async {
                       final controller = TextEditingController(text: settings.confusableCharactersSheetId);
@@ -524,6 +549,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text(AppLocalizations.of(context)!.emailCopied)),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SettingsGroup(
+                title: AppLocalizations.of(context)!.settingsGroupStorage,
+                children: [
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.exportProfile,
+                    showDivider: true,
+                    trailing: const Icon(Icons.upload_file, color: Colors.blue),
+                    onTap: () async {
+                      await ProfileService.exportProfile(context, ref.read(databaseServiceProvider));
+                    },
+                  ),
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.importProfile,
+                    showDivider: true,
+                    trailing: const Icon(Icons.download, color: Colors.green),
+                    onTap: () async {
+                      await ProfileService.importProfile(context, ref.read(databaseServiceProvider));
+                      ref.refresh(settingsProvider);
+                    },
+                  ),
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.clearImageCache,
+                    showDivider: false,
+                    trailing: const Icon(Icons.delete_outline, color: Colors.red),
+                    onTap: () async {
+                      await DefaultCacheManager().emptyCache();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(AppLocalizations.of(context)!.imageCacheCleared)),
                         );
                       }
                     },

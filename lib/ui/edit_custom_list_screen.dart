@@ -10,8 +10,13 @@ import 'widgets/modern_text_field.dart';
 
 class EditCustomListScreen extends ConsumerStatefulWidget {
   final CustomList? customList; // If null, we are creating a new list
+  final bool isLocalOnly;
 
-  const EditCustomListScreen({super.key, this.customList});
+  const EditCustomListScreen({
+    super.key,
+    this.customList,
+    this.isLocalOnly = false,
+  });
 
   @override
   ConsumerState<EditCustomListScreen> createState() =>
@@ -138,14 +143,20 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
     await db.saveCustomList(list);
 
     if (sheetId.isNotEmpty) {
-      try {
-        final words = await GoogleSheetsService.fetchWords(sheetId, sheetName: list.googleSheetTabName);
-        await db.syncWordsForList(list, words);
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(AppLocalizations.of(context)!.errorNetwork)),
-          );
+      bool shouldSync = widget.customList == null ||
+          widget.customList!.googleSheetId != sheetId ||
+          widget.customList!.googleSheetTabName != (sheetTabName.isEmpty ? null : sheetTabName);
+
+      if (shouldSync) {
+        try {
+          final words = await GoogleSheetsService.fetchWords(sheetId, sheetName: list.googleSheetTabName);
+          await db.syncWordsForList(list, words);
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(AppLocalizations.of(context)!.errorNetwork)),
+            );
+          }
         }
       }
     }
@@ -234,20 +245,46 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            SettingsGroup(
-              title: AppLocalizations.of(context)!.listGroupSync,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    children: [
-                      ModernTextField(
-                        controller: _sheetIdController,
-                        labelText: AppLocalizations.of(context)!.settingsSheetId,
-                        hintText: AppLocalizations.of(context)!.settingsSheetIdHint,
-                        onChanged: (val) => setState(() {}),
-                      ),
+            if (!widget.isLocalOnly) ...[
+              const SizedBox(height: 16),
+              SettingsGroup(
+                title: AppLocalizations.of(context)!.listGroupSync,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: ModernTextField(
+                                controller: _sheetIdController,
+                                labelText: AppLocalizations.of(context)!.settingsSheetId,
+                                hintText: AppLocalizations.of(context)!.settingsSheetIdHint,
+                                onChanged: (val) => setState(() {}),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.info_outline),
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: Text(AppLocalizations.of(context)!.sheetFormatHintTitle),
+                                    content: Text(AppLocalizations.of(context)!.sheetFormatHintDesc),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text('OK'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
                       const SizedBox(height: 8),
                       ModernTextField(
                         controller: _sheetTabNameController,
@@ -274,7 +311,8 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+          ],
+          const SizedBox(height: 16),
             SettingsGroup(
               title: AppLocalizations.of(context)!.listGroupQuestions,
               children: [

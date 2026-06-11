@@ -145,7 +145,7 @@
   "resetToGeneralSettings": "Сбросить к общим настройкам",
   "searchLists": "Поиск списков...",
   "searchWords": "Поиск слов...",
-  "trainingResultsMotivation": "Ошибки — это ступеньки к знаниям! Попробуйте еще раз.",
+  "trainingResultsMotivation": "Ошибки — это ступеньки к знаниям!",
   "statLearned": "Изучено",
   "statInProgress": "Учится",
   "statMistakes": "Ошибок",
@@ -164,5 +164,15 @@
   "readyForPractice": "Готовы к практике?",
   "takeATrainingSession": "Пройдите тренировку",
   "threeMinutes": "5 мин",
-  "start": "Начать"
+  "start": "Начать",
+  "wordMnemonic": "Мнемоника: {mnemonic}",
+  "@wordMnemonic": { "placeholders": { "mnemonic": { "type": "String" } } },
+  "sheetFormatHintTitle": "Формат таблицы (Вставлять id таблицы)",
+  "sheetFormatHintDesc": "Формат имени таблицы: [язык] Имя таблицы\nПример: [ja-JP] Кандзи\n\nВставлять нужно только id таблицы.\nВ столбце A должны быть уникальные числа.\nТаблица должна быть доступна по ссылке.\n\nКолонки:\nA: ID (число)\nB: Слово\nC: Чтение\nD: Перевод\nE: Картинка (URL)\nF: Мнемоника",
+  "confusableFormatHintTitle": "Формат таблицы  (Вставлять id таблицы)",
+  "confusableFormatHintDesc": "A: Символы (без пробелов, например: 一二三)",
+  "createLocalList": "Создать локальный список",
+  "settingsGroupStorage": "ПАМЯТЬ",
+  "clearImageCache": "Очистить кэш изображений",
+  "imageCacheCleared": "Кэш изображений успешно очищен"
 }

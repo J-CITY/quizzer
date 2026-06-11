@@ -111,7 +111,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     if (streak >= 100) return ColorConstants.streakColor100Days;
     if (streak >= 60) return ColorConstants.streakColor60Days;
     if (streak >= 30) return ColorConstants.streakColor30Days;
-    if (streak >= 20) return ColorConstants.streakColor20Days;
     if (streak >= 10) return ColorConstants.streakColor10Days;
     if (streak >= 3) return ColorConstants.streakColor3Days;
     return ColorConstants.streakColorDefault;
@@ -130,17 +129,15 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     list.words.loadSync();
     final words = list.words.toList();
     if (words.isEmpty) return;
-    
+
     final unlearned = words.where((w) => w.progress < 5).toList();
     final isLearning = unlearned.isNotEmpty;
-    
+
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => TrainingScreen(
-          customListId: list.id,
-          isReviewMode: !isLearning,
-        ),
+        builder: (_) =>
+            TrainingScreen(customListId: list.id, isReviewMode: !isLearning),
       ),
     ).then((_) => _loadData());
   }
@@ -351,78 +348,71 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-              SizedBox(
-                height: 24,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Text(
-                      title,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+          SizedBox(
+            height: 24,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(height: 8),
-              if (showLegend)
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (showLegend)
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                chartWidget,
+                const SizedBox(height: 16),
                 Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    chartWidget,
-                    const SizedBox(height: 16),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildLegendItem(
-                          Theme.of(
-                            context,
-                          ).extension<AppColorsExtension>()!.success,
-                          AppLocalizations.of(context)!.learned,
-                          learned,
-                        ),
-                        const SizedBox(height: 8),
-                        _buildLegendItem(
-                          Theme.of(
-                            context,
-                          ).extension<AppColorsExtension>()!.chart,
-                          AppLocalizations.of(context)!.inProgress,
-                          inProgress,
-                        ),
-                        const SizedBox(height: 8),
-                        _buildLegendItem(
-                          Theme.of(
-                            context,
-                          ).extension<AppColorsExtension>()!.border,
-                          AppLocalizations.of(context)!.newWords,
-                          unlearned,
-                        ),
-                      ],
+                    _buildLegendItem(
+                      Theme.of(
+                        context,
+                      ).extension<AppColorsExtension>()!.success,
+                      AppLocalizations.of(context)!.learned,
+                      learned,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildLegendItem(
+                      Theme.of(context).extension<AppColorsExtension>()!.chart,
+                      AppLocalizations.of(context)!.inProgress,
+                      inProgress,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildLegendItem(
+                      Theme.of(context).extension<AppColorsExtension>()!.border,
+                      AppLocalizations.of(context)!.newWords,
+                      unlearned,
                     ),
                   ],
-                )
-              else
-                Expanded(child: chartWidget),
-            ],
-          ),
+                ),
+              ],
+            )
+          else
+            Expanded(child: chartWidget),
+        ],
+      ),
     );
 
     if (!wrapInCard) {
-      return GestureDetector(
-        onTap: onTap,
-        child: innerWidget,
-      );
+      return GestureDetector(onTap: onTap, child: innerWidget);
     }
 
     return GestureDetector(
       onTap: onTap,
-      child: AcrylicCard(
-        margin: EdgeInsets.zero,
-        child: innerWidget,
-      ),
+      child: AcrylicCard(margin: EdgeInsets.zero, child: innerWidget),
     );
   }
 
@@ -452,7 +442,10 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
             AcrylicCard(
               margin: const EdgeInsets.symmetric(vertical: 8.0),
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16.0,
+                  horizontal: 16.0,
+                ),
                 child: Row(
                   children: [
                     Expanded(
@@ -475,14 +468,18 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                             style: TextStyle(
                               fontSize: 36,
                               fontWeight: FontWeight.bold,
-                              color: Theme.of(context).extension<AppColorsExtension>()!.textPrimary,
+                              color: Theme.of(
+                                context,
+                              ).extension<AppColorsExtension>()!.textPrimary,
                             ),
                           ),
                           Text(
                             AppLocalizations.of(context)!.daysInARow,
                             style: TextStyle(
                               fontSize: 14,
-                              color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary,
+                              color: Theme.of(
+                                context,
+                              ).extension<AppColorsExtension>()!.textSecondary,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -530,20 +527,26 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                               m.year == _selectedMonth.year &&
                               m.month == _selectedMonth.month;
                           return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4.0,
+                            ),
                             child: ChoiceChip(
                               label: Text(
                                 '${m.month.toString().padLeft(2, '0')}.${m.year}',
                               ),
                               selected: isSelected,
                               onSelected: (val) => _onMonthChanged(m),
-                              selectedColor: Theme.of(context).colorScheme.primary,
+                              selectedColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
                               showCheckmark: false,
                               labelStyle: TextStyle(
                                 color: isSelected
                                     ? Colors.white
                                     : Theme.of(context).colorScheme.onSurface,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
                           );
@@ -565,7 +568,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                      Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.2),
                       Colors.transparent,
                     ],
                     begin: Alignment.topLeft,
@@ -592,7 +597,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                             AppLocalizations.of(context)!.takeATrainingSession,
                             style: TextStyle(
                               fontSize: 14,
-                              color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary,
+                              color: Theme.of(
+                                context,
+                              ).extension<AppColorsExtension>()!.textSecondary,
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -601,14 +608,18 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                               Icon(
                                 Icons.access_time,
                                 size: 16,
-                                color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary,
+                                color: Theme.of(context)
+                                    .extension<AppColorsExtension>()!
+                                    .textSecondary,
                               ),
                               const SizedBox(width: 4),
                               Text(
                                 AppLocalizations.of(context)!.threeMinutes,
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: Theme.of(context).extension<AppColorsExtension>()!.textSecondary,
+                                  color: Theme.of(context)
+                                      .extension<AppColorsExtension>()!
+                                      .textSecondary,
                                 ),
                               ),
                             ],
@@ -621,22 +632,26 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.primary,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
                         elevation: 0,
                       ),
                       onPressed: _startQuickTraining,
-                      child: Text(AppLocalizations.of(context)!.start, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      child: Text(
+                        AppLocalizations.of(context)!.start,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
-
-
 
             // Grid of Custom Lists Pie Charts
             GridView.builder(

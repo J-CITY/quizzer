@@ -58,6 +58,9 @@ dependencies:
   confetti: ^0.8.0
   cached_network_image: ^3.4.1
   flutter_cache_manager: ^3.4.1
+  translator: ^1.0.4+1
+  image_picker: ^1.2.2
+  url_launcher: ^6.3.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

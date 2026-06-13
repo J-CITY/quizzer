@@ -6,6 +6,7 @@ import '../utils/constants.dart';
 import 'settings_screen.dart';
 import 'custom_lists_tab.dart';
 import 'statistics_screen.dart';
+import 'search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -27,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await NotificationService.requestPermissions();
   }
 
-  final List<Widget> _tabs = [StatisticsScreen(), CustomListsTab()];
+  final List<Widget> _tabs = [const StatisticsScreen(), const CustomListsTab(), const SearchScreen()];
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +44,9 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(
           _currentIndex == 0
               ? AppLocalizations.of(context)!.statistics
-              : AppLocalizations.of(context)!.wordLists,
+              : _currentIndex == 1
+                  ? AppLocalizations.of(context)!.wordLists
+                  : AppLocalizations.of(context)!.tabSearch,
         ),
         centerTitle: true,
         actions: [
@@ -96,8 +99,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: AppLocalizations.of(context)!.statistics,
                   ),
                   BottomNavigationBarItem(
-                    icon: Icon(Icons.list),
+                    icon: const Icon(Icons.list),
                     label: AppLocalizations.of(context)!.tabCustomLists,
+                  ),
+                  BottomNavigationBarItem(
+                    icon: const Icon(Icons.search),
+                    label: AppLocalizations.of(context)!.tabSearch,
                   ),
                 ],
               ),

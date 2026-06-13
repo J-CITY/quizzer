@@ -341,21 +341,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     String? subText = q.subtitle;
 
     if (hasAnswered) {
-      if (q.type != QuestionType.japToTrans) {
-        showTranslation = true;
-      }
-
-      if (q.type == QuestionType.transToJap ||
-          q.type == QuestionType.voiceToTrans ||
-          q.type == QuestionType.voiceToJap ||
-          q.type == QuestionType.voiceToJapInput ||
-          q.type == QuestionType.voiceToJapConstructor ||
-          q.type == QuestionType.transToJapInput ||
-          q.type == QuestionType.transToJapConstructor ||
-          q.type == QuestionType.imageToJap) {
-        mainText = q.word.japanese;
-        subText = q.word.reading;
-      }
+      mainText = q.word.japanese;
+      subText = q.word.reading;
+      showTranslation = true;
     }
 
     bool showImage = false;

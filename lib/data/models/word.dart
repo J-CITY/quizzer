@@ -23,5 +23,7 @@ class Word {
 
   DateTime? lastTrained;
 
+  int orderIndex = 0;
+
   bool get isLearned => progress >= 5;
 }

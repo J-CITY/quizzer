@@ -42,4 +42,6 @@ class Settings {
 
   String? confusableCharactersSheetId;
   List<String> customConfusableGroups = [];
+
+  String? pixabayApiKey;
 }

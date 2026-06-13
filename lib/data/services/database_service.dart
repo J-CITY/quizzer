@@ -103,6 +103,10 @@ class DatabaseService {
         }
       }
 
+      for (int i = 0; i < updatedOrNewWords.length; i++) {
+        updatedOrNewWords[i].orderIndex = i;
+      }
+
       await isar.words.putAll(updatedOrNewWords);
 
       // Replace the custom list's words completely
@@ -156,6 +160,29 @@ class DatabaseService {
     word.lastTrained = DateTime.now();
     await isar.writeTxn(() async {
       await isar.words.put(word);
+    });
+  }
+
+  Future<void> updateWord(Word word) async {
+    await isar.writeTxn(() async {
+      await isar.words.put(word);
+    });
+  }
+
+  Future<void> deleteWordFromList(CustomList list, Word word) async {
+    await isar.writeTxn(() async {
+      list.words.remove(word);
+      await list.words.save();
+    });
+    await cleanUpOrphanedWords();
+  }
+
+  Future<void> updateWordsOrder(List<Word> words) async {
+    await isar.writeTxn(() async {
+      for (int i = 0; i < words.length; i++) {
+        words[i].orderIndex = i;
+      }
+      await isar.words.putAll(words);
     });
   }
 

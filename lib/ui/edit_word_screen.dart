@@ -283,7 +283,7 @@ class _EditWordScreenState extends ConsumerState<EditWordScreen> {
             TextField(
               controller: _japaneseController,
               decoration: InputDecoration(
-                labelText: AppLocalizations.of(context)!.wordJapaneseHint,
+                labelText: AppLocalizations.of(context)!.wordOriginalHint,
                 border: const OutlineInputBorder(),
               ),
             ),

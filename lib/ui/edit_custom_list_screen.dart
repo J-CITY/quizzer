@@ -5,8 +5,10 @@ import '../data/models/custom_list.dart';
 import '../data/services/database_service.dart';
 import '../data/services/google_sheets_service.dart';
 import 'widgets/settings_group.dart';
-import 'widgets/settings_tile.dart';
+import 'widgets/language_selector.dart';
+import '../utils/language_utils.dart';
 import 'widgets/modern_text_field.dart';
+import 'widgets/settings_tile.dart';
 
 class EditCustomListScreen extends ConsumerStatefulWidget {
   final CustomList? customList; // If null, we are creating a new list
@@ -28,7 +30,7 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
   late TextEditingController _emojiController;
   late TextEditingController _sheetIdController;
   late TextEditingController _sheetTabNameController;
-  String _language = 'ja-JP';
+  late TextEditingController _languageController;
   bool _syncOnStartup = false;
   bool _isSaving = false;
 
@@ -60,19 +62,29 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
     _sheetTabNameController = TextEditingController(
       text: widget.customList?.googleSheetTabName ?? '',
     );
-    _language = widget.customList?.language ?? 'ja-JP';
+    _languageController = TextEditingController(
+      text: widget.customList?.language ?? 'ja-JP',
+    );
     _syncOnStartup = widget.customList?.syncOnStartup ?? false;
-    _useCustomQuestionSettings = widget.customList?.useCustomQuestionSettings ?? false;
-    _questionWordToTranslate = widget.customList?.questionWordToTranslate ?? true;
-    _questionTranslateToWord = widget.customList?.questionTranslateToWord ?? true;
+    _useCustomQuestionSettings =
+        widget.customList?.useCustomQuestionSettings ?? false;
+    _questionWordToTranslate =
+        widget.customList?.questionWordToTranslate ?? true;
+    _questionTranslateToWord =
+        widget.customList?.questionTranslateToWord ?? true;
     _questionWordToReading = widget.customList?.questionWordToReading ?? true;
     _questionReadingToWord = widget.customList?.questionReadingToWord ?? true;
-    _questionVoiceToTranslate = widget.customList?.questionVoiceToTranslate ?? true;
+    _questionVoiceToTranslate =
+        widget.customList?.questionVoiceToTranslate ?? true;
     _questionVoiceToWord = widget.customList?.questionVoiceToWord ?? true;
-    _questionVoiceToWordInput = widget.customList?.questionVoiceToWordInput ?? true;
-    _questionVoiceToWordConstructor = widget.customList?.questionVoiceToWordConstructor ?? true;
-    _questionTranslateToWordInput = widget.customList?.questionTranslateToWordInput ?? true;
-    _questionTranslateToWordConstructor = widget.customList?.questionTranslateToWordConstructor ?? true;
+    _questionVoiceToWordInput =
+        widget.customList?.questionVoiceToWordInput ?? true;
+    _questionVoiceToWordConstructor =
+        widget.customList?.questionVoiceToWordConstructor ?? true;
+    _questionTranslateToWordInput =
+        widget.customList?.questionTranslateToWordInput ?? true;
+    _questionTranslateToWordConstructor =
+        widget.customList?.questionTranslateToWordConstructor ?? true;
     _questionImageToWord = widget.customList?.questionImageToWord ?? true;
   }
 
@@ -87,12 +99,17 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
 
     if (name.isEmpty) {
       if (sheetId.isNotEmpty) {
-        final result = await GoogleSheetsService.fetchSheetNameAndLanguage(sheetId);
-        if (result != null && result.containsKey('name') && result['name']!.isNotEmpty) {
+        final result = await GoogleSheetsService.fetchSheetNameAndLanguage(
+          sheetId,
+        );
+        if (result != null &&
+            result.containsKey('name') &&
+            result['name']!.isNotEmpty) {
           name = result['name']!;
           _nameController.text = name;
-          if (result.containsKey('language') && result['language']!.isNotEmpty) {
-            _language = result['language']!;
+          if (result.containsKey('language') &&
+              result['language']!.isNotEmpty) {
+            _languageController.text = result['language']!;
           }
         } else {
           name = sheetId;
@@ -111,11 +128,35 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
       }
     }
 
+    final lang = _languageController.text.trim();
     final db = ref.read(databaseServiceProvider);
+
+    final isLangValid = await LanguageUtils.validateAndSaveCustomLanguage(
+      lang,
+      db,
+    );
+    if (!isLangValid) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.errorNetwork ??
+                  'Invalid or unsupported language!',
+            ),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+        setState(() => _isSaving = false);
+      }
+      return;
+    }
+
     final list = widget.customList ?? CustomList();
     list.name = name;
-    list.emoji = _emojiController.text.trim().isNotEmpty ? _emojiController.text.trim() : null;
-    list.language = _language;
+    list.emoji = _emojiController.text.trim().isNotEmpty
+        ? _emojiController.text.trim()
+        : null;
+    list.language = lang;
 
     if (sheetId.isNotEmpty) {
       list.googleSheetId = sheetId;
@@ -137,24 +178,32 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
     list.questionVoiceToWordInput = _questionVoiceToWordInput;
     list.questionVoiceToWordConstructor = _questionVoiceToWordConstructor;
     list.questionTranslateToWordInput = _questionTranslateToWordInput;
-    list.questionTranslateToWordConstructor = _questionTranslateToWordConstructor;
+    list.questionTranslateToWordConstructor =
+        _questionTranslateToWordConstructor;
     list.questionImageToWord = _questionImageToWord;
 
     await db.saveCustomList(list);
 
     if (sheetId.isNotEmpty) {
-      bool shouldSync = widget.customList == null ||
+      bool shouldSync =
+          widget.customList == null ||
           widget.customList!.googleSheetId != sheetId ||
-          widget.customList!.googleSheetTabName != (sheetTabName.isEmpty ? null : sheetTabName);
+          widget.customList!.googleSheetTabName !=
+              (sheetTabName.isEmpty ? null : sheetTabName);
 
       if (shouldSync) {
         try {
-          final words = await GoogleSheetsService.fetchWords(sheetId, sheetName: list.googleSheetTabName);
+          final words = await GoogleSheetsService.fetchWords(
+            sheetId,
+            sheetName: list.googleSheetTabName,
+          );
           await db.syncWordsForList(list, words);
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(AppLocalizations.of(context)!.errorNetwork)),
+              SnackBar(
+                content: Text(AppLocalizations.of(context)!.errorNetwork),
+              ),
             );
           }
         }
@@ -214,7 +263,9 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                       Expanded(
                         child: ModernTextField(
                           controller: _nameController,
-                          labelText: AppLocalizations.of(context)!.listNameLabel,
+                          labelText: AppLocalizations.of(
+                            context,
+                          )!.listNameLabel,
                         ),
                       ),
                     ],
@@ -224,23 +275,9 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                 SettingsTile(
                   title: AppLocalizations.of(context)!.dictionaryLanguage,
                   showDivider: false,
-                  trailing: DropdownButton<String>(
-                    value: _language,
-                    underline: const SizedBox(),
-                    items: [
-                      DropdownMenuItem(value: 'ja-JP', child: Text(AppLocalizations.of(context)!.langJapanese)),
-                      DropdownMenuItem(value: 'en-US', child: Text(AppLocalizations.of(context)!.langEnglish)),
-                      DropdownMenuItem(value: 'es-ES', child: Text(AppLocalizations.of(context)!.langSpanish)),
-                      DropdownMenuItem(value: 'ru-RU', child: Text(AppLocalizations.of(context)!.langRussian)),
-                      DropdownMenuItem(value: 'de-DE', child: Text(AppLocalizations.of(context)!.langGerman)),
-                      DropdownMenuItem(value: 'fr-FR', child: Text(AppLocalizations.of(context)!.langFrench)),
-                      DropdownMenuItem(value: 'it-IT', child: Text(AppLocalizations.of(context)!.langItalian)),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _language = val);
-                      }
-                    },
+                  trailing: LanguageSelector(
+                    label: '',
+                    controller: _languageController,
                   ),
                 ),
               ],
@@ -260,8 +297,12 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                             Expanded(
                               child: ModernTextField(
                                 controller: _sheetIdController,
-                                labelText: AppLocalizations.of(context)!.settingsSheetId,
-                                hintText: AppLocalizations.of(context)!.settingsSheetIdHint,
+                                labelText: AppLocalizations.of(
+                                  context,
+                                )!.settingsSheetId,
+                                hintText: AppLocalizations.of(
+                                  context,
+                                )!.settingsSheetIdHint,
                                 onChanged: (val) => setState(() {}),
                               ),
                             ),
@@ -271,8 +312,16 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                                 showDialog(
                                   context: context,
                                   builder: (context) => AlertDialog(
-                                    title: Text(AppLocalizations.of(context)!.sheetFormatHintTitle),
-                                    content: Text(AppLocalizations.of(context)!.sheetFormatHintDesc),
+                                    title: Text(
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.sheetFormatHintTitle,
+                                    ),
+                                    content: Text(
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.sheetFormatHintDesc,
+                                    ),
                                     actions: [
                                       TextButton(
                                         onPressed: () => Navigator.pop(context),
@@ -285,34 +334,38 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                             ),
                           ],
                         ),
-                      const SizedBox(height: 8),
-                      ModernTextField(
-                        controller: _sheetTabNameController,
-                        labelText: AppLocalizations.of(context)!.listNameOptional,
-                        hintText: AppLocalizations.of(context)!.exampleSheetName,
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        ModernTextField(
+                          controller: _sheetTabNameController,
+                          labelText: AppLocalizations.of(
+                            context,
+                          )!.listNameOptional,
+                          hintText: AppLocalizations.of(
+                            context,
+                          )!.exampleSheetName,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                SettingsTile(
-                  title: AppLocalizations.of(context)!.syncOnStartup,
-                  showDivider: false,
-                  trailing: Switch(
-                    value: _syncOnStartup,
-                    onChanged: _sheetIdController.text.trim().isNotEmpty
-                        ? (val) {
-                            setState(() {
-                              _syncOnStartup = val;
-                            });
-                          }
-                        : null,
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.syncOnStartup,
+                    showDivider: false,
+                    trailing: Switch(
+                      value: _syncOnStartup,
+                      onChanged: _sheetIdController.text.trim().isNotEmpty
+                          ? (val) {
+                              setState(() {
+                                _syncOnStartup = val;
+                              });
+                            }
+                          : null,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: 16),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
             SettingsGroup(
               title: AppLocalizations.of(context)!.listGroupQuestions,
               children: [
@@ -328,59 +381,101 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                 ),
                 if (_useCustomQuestionSettings) ...[
                   CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionWordToTranslate),
+                    title: Text(
+                      AppLocalizations.of(context)!.questionWordToTranslate,
+                    ),
                     value: _questionWordToTranslate,
-                    onChanged: (val) => setState(() => _questionWordToTranslate = val ?? true),
+                    onChanged: (val) =>
+                        setState(() => _questionWordToTranslate = val ?? true),
                   ),
                   CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionTranslateToWord),
+                    title: Text(
+                      AppLocalizations.of(context)!.questionTranslateToWord,
+                    ),
                     value: _questionTranslateToWord,
-                    onChanged: (val) => setState(() => _questionTranslateToWord = val ?? true),
+                    onChanged: (val) =>
+                        setState(() => _questionTranslateToWord = val ?? true),
                   ),
                   CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionWordToReading),
+                    title: Text(
+                      AppLocalizations.of(context)!.questionWordToReading,
+                    ),
                     value: _questionWordToReading,
-                    onChanged: (val) => setState(() => _questionWordToReading = val ?? true),
+                    onChanged: (val) =>
+                        setState(() => _questionWordToReading = val ?? true),
                   ),
                   CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionReadingToWord),
+                    title: Text(
+                      AppLocalizations.of(context)!.questionReadingToWord,
+                    ),
                     value: _questionReadingToWord,
-                    onChanged: (val) => setState(() => _questionReadingToWord = val ?? true),
+                    onChanged: (val) =>
+                        setState(() => _questionReadingToWord = val ?? true),
                   ),
                   CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionVoiceToTranslate),
+                    title: Text(
+                      AppLocalizations.of(context)!.questionVoiceToTranslate,
+                    ),
                     value: _questionVoiceToTranslate,
-                    onChanged: (val) => setState(() => _questionVoiceToTranslate = val ?? true),
+                    onChanged: (val) =>
+                        setState(() => _questionVoiceToTranslate = val ?? true),
                   ),
                   CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionVoiceToWord),
+                    title: Text(
+                      AppLocalizations.of(context)!.questionVoiceToWord,
+                    ),
                     value: _questionVoiceToWord,
-                    onChanged: (val) => setState(() => _questionVoiceToWord = val ?? true),
+                    onChanged: (val) =>
+                        setState(() => _questionVoiceToWord = val ?? true),
                   ),
                   CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionVoiceToWordInput),
+                    title: Text(
+                      AppLocalizations.of(context)!.questionVoiceToWordInput,
+                    ),
                     value: _questionVoiceToWordInput,
-                    onChanged: (val) => setState(() => _questionVoiceToWordInput = val ?? true),
+                    onChanged: (val) =>
+                        setState(() => _questionVoiceToWordInput = val ?? true),
                   ),
                   CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionVoiceToWordConstructor),
+                    title: Text(
+                      AppLocalizations.of(
+                        context,
+                      )!.questionVoiceToWordConstructor,
+                    ),
                     value: _questionVoiceToWordConstructor,
-                    onChanged: (val) => setState(() => _questionVoiceToWordConstructor = val ?? true),
+                    onChanged: (val) => setState(
+                      () => _questionVoiceToWordConstructor = val ?? true,
+                    ),
                   ),
                   CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionTranslateToWordInput),
+                    title: Text(
+                      AppLocalizations.of(
+                        context,
+                      )!.questionTranslateToWordInput,
+                    ),
                     value: _questionTranslateToWordInput,
-                    onChanged: (val) => setState(() => _questionTranslateToWordInput = val ?? true),
+                    onChanged: (val) => setState(
+                      () => _questionTranslateToWordInput = val ?? true,
+                    ),
                   ),
                   CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionTranslateToWordConstructor),
+                    title: Text(
+                      AppLocalizations.of(
+                        context,
+                      )!.questionTranslateToWordConstructor,
+                    ),
                     value: _questionTranslateToWordConstructor,
-                    onChanged: (val) => setState(() => _questionTranslateToWordConstructor = val ?? true),
+                    onChanged: (val) => setState(
+                      () => _questionTranslateToWordConstructor = val ?? true,
+                    ),
                   ),
                   CheckboxListTile(
-                    title: Text(AppLocalizations.of(context)!.questionImageToWord),
+                    title: Text(
+                      AppLocalizations.of(context)!.questionImageToWord,
+                    ),
                     value: _questionImageToWord,
-                    onChanged: (val) => setState(() => _questionImageToWord = val ?? true),
+                    onChanged: (val) =>
+                        setState(() => _questionImageToWord = val ?? true),
                   ),
                   Align(
                     alignment: Alignment.center,
@@ -388,11 +483,13 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                       onPressed: () {
                         setState(() => _useCustomQuestionSettings = false);
                       },
-                      child: Text(AppLocalizations.of(context)!.resetToGeneralSettings),
+                      child: Text(
+                        AppLocalizations.of(context)!.resetToGeneralSettings,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
-                ]
+                ],
               ],
             ),
             const SizedBox(height: 32),

@@ -61,6 +61,8 @@ dependencies:
   translator: ^1.0.4+1
   image_picker: ^1.2.2
   url_launcher: ^6.3.2
+  google_mobile_ads: ^9.0.0
+  in_app_purchase: ^3.3.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

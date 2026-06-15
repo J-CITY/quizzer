@@ -4,26 +4,60 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:quizzer/l10n/app_localizations.dart';
 import 'edit_word_screen.dart';
+import 'package:quizzer/data/services/database_service.dart';
+import 'package:quizzer/main.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'widgets/glow_button.dart';
 import 'widgets/acrylic_card.dart';
+import 'widgets/language_selector.dart';
+import '../utils/language_utils.dart';
 
-class SearchScreen extends StatefulWidget {
+class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
   @override
-  State<SearchScreen> createState() => _SearchScreenState();
+  ConsumerState<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
+class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _controller = TextEditingController();
   final _translator = GoogleTranslator();
 
-  String _sourceLanguage = 'ru';
-  String _targetLanguage = 'ja';
+  final _sourceController = TextEditingController();
+  final _targetController = TextEditingController();
+
+  String _sourceLanguage = 'ru-RU';
+  String _targetLanguage = 'ja-JP';
 
   bool _isLoading = false;
   String? _translatedText;
   String? _reading;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedLanguages();
+  }
+
+  Future<void> _loadSavedLanguages() async {
+    final settings = await ref.read(databaseServiceProvider).getSettings();
+    if (mounted) {
+      setState(() {
+        _sourceLanguage = settings.searchSourceLanguage;
+        _targetLanguage = settings.searchTargetLanguage;
+        _sourceController.text = _sourceLanguage;
+        _targetController.text = _targetLanguage;
+      });
+    }
+  }
+
+  Future<void> _saveLanguages() async {
+    final db = ref.read(databaseServiceProvider);
+    final settings = await db.getSettings();
+    settings.searchSourceLanguage = _sourceController.text.trim();
+    settings.searchTargetLanguage = _targetController.text.trim();
+    await db.saveSettings(settings);
+  }
 
   Future<void> _translate() async {
     final text = _controller.text.trim();
@@ -35,19 +69,41 @@ class _SearchScreenState extends State<SearchScreen> {
       _reading = null;
     });
 
+    final db = ref.read(databaseServiceProvider);
+    final src = _sourceController.text.trim();
+    final tgt = _targetController.text.trim();
+
+    final isSrcValid = await LanguageUtils.validateAndSaveCustomLanguage(src, db);
+    final isTgtValid = await LanguageUtils.validateAndSaveCustomLanguage(tgt, db);
+
+    if (!isSrcValid || !isTgtValid) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.errorNetwork ?? 'Invalid or unsupported language!'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+        setState(() => _isLoading = false);
+      }
+      return;
+    }
+
+    _saveLanguages();
+
     try {
       final translation = await _translator.translate(
         text,
-        from: _sourceLanguage,
-        to: _targetLanguage,
+        from: src.split('-').first,
+        to: tgt.split('-').first,
       );
 
       _translatedText = translation.text;
 
       // If translating TO Japanese, fetch reading
-      if (_targetLanguage == 'ja') {
+      if (tgt.split('-').first == 'ja') {
         _reading = await _fetchReading(_translatedText!);
-      } else if (_sourceLanguage == 'ja') {
+      } else if (src.split('-').first == 'ja') {
         // If from Japanese, the original text might have reading
         _reading = await _fetchReading(text);
       }
@@ -86,10 +142,11 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _swapLanguages() {
     setState(() {
-      final temp = _sourceLanguage;
-      _sourceLanguage = _targetLanguage;
-      _targetLanguage = temp;
+      final temp = _sourceController.text;
+      _sourceController.text = _targetController.text;
+      _targetController.text = temp;
     });
+    _saveLanguages();
   }
 
   @override
@@ -102,31 +159,21 @@ class _SearchScreenState extends State<SearchScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                DropdownButton<String>(
-                  value: _sourceLanguage,
-                  items: const [
-                    DropdownMenuItem(value: 'ru', child: Text('RU')),
-                    DropdownMenuItem(value: 'en', child: Text('EN')),
-                    DropdownMenuItem(value: 'ja', child: Text('JA')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _sourceLanguage = val);
-                  },
+                Expanded(
+                  child: LanguageSelector(
+                    label: '',
+                    controller: _sourceController,
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.swap_horiz),
                   onPressed: _swapLanguages,
                 ),
-                DropdownButton<String>(
-                  value: _targetLanguage,
-                  items: const [
-                    DropdownMenuItem(value: 'ru', child: Text('RU')),
-                    DropdownMenuItem(value: 'en', child: Text('EN')),
-                    DropdownMenuItem(value: 'ja', child: Text('JA')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _targetLanguage = val);
-                  },
+                Expanded(
+                  child: LanguageSelector(
+                    label: '',
+                    controller: _targetController,
+                  ),
                 ),
               ],
             ),
@@ -174,7 +221,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
-                            _targetLanguage == 'ja' ? _translatedText! : _controller.text.trim(),
+                            _targetController.text.split('-').first == 'ja' ? _translatedText! : _controller.text.trim(),
                             style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
                             textAlign: TextAlign.center,
                           ),
@@ -193,14 +240,14 @@ class _SearchScreenState extends State<SearchScreen> {
                           const Divider(),
                           const SizedBox(height: 16),
                           Text(
-                            _targetLanguage == 'ja' ? _controller.text.trim() : _translatedText!,
+                            _targetController.text.split('-').first == 'ja' ? _controller.text.trim() : _translatedText!,
                             style: const TextStyle(fontSize: 24),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 32),
                           GlowButton(
                             onPressed: () {
-                              final isJaTarget = _targetLanguage == 'ja';
+                              final isJaTarget = _targetController.text.split('-').first == 'ja';
                               final japText = isJaTarget ? _translatedText : _controller.text.trim();
                               final readingToPass = (_reading != null && _reading != japText) ? _reading : '';
                               

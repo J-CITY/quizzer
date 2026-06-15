@@ -192,5 +192,10 @@
   "saveWord": "Сохранить слово",
   "selectListForWord": "Выберите список для сохранения",
   "errorNoListSelected": "Сначала выберите или создайте список",
-  "wordSaved": "Слово успешно сохранено"
+  "wordSaved": "Слово успешно сохранено",
+  "removeAdsButton": "Отключить рекламу за $1",
+  "restorePurchasesButton": "Восстановить покупки",
+  "purchaseSuccess": "Реклама успешно отключена!",
+  "purchaseError": "Ошибка при покупке. Попробуйте еще раз.",
+  "purchaseRestored": "Покупки успешно восстановлены!"
 }

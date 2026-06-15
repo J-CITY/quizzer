@@ -11,6 +11,8 @@ import '../utils/constants.dart';
 import '../ui/widgets/settings_group.dart';
 import '../ui/widgets/settings_tile.dart';
 import '../data/services/profile_service.dart';
+import '../main.dart';
+import '../core/feature_flags.dart';
 
 final settingsProvider = FutureProvider.autoDispose<app.Settings>((ref) async {
   return ref.watch(databaseServiceProvider).getSettings();
@@ -591,6 +593,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ],
               ),
+              if (FeatureFlags.enableIap && !settings.isAdFree) ...[
+                const SizedBox(height: 16),
+                SettingsGroup(
+                  title: 'IN-APP PURCHASES',
+                  children: [
+                    SettingsTile(
+                      title: AppLocalizations.of(context)!.removeAdsButton,
+                      showDivider: true,
+                      trailing: const Icon(Icons.monetization_on, color: Colors.amber),
+                      onTap: () async {
+                        await ref.read(iapServiceProvider).buyRemoveAds(context);
+                      },
+                    ),
+                    SettingsTile(
+                      title: AppLocalizations.of(context)!.restorePurchasesButton,
+                      showDivider: false,
+                      trailing: const Icon(Icons.restore, color: Colors.blue),
+                      onTap: () async {
+                        await ref.read(iapServiceProvider).restorePurchases();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(AppLocalizations.of(context)!.purchaseRestored)),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 32),
             ],
           );

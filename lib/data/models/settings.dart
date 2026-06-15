@@ -42,6 +42,12 @@ class Settings {
 
   String? confusableCharactersSheetId;
   List<String> customConfusableGroups = [];
+  List<String> customLanguages = [];
 
   String? pixabayApiKey;
+
+  bool isAdFree = false;
+
+  String searchSourceLanguage = 'ru-RU';
+  String searchTargetLanguage = 'ja-JP';
 }

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -151,7 +152,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
         ? q.word.reading!
         : q.word.japanese;
 
-    await ref.read(ttsProvider).stop();
+    if (!Platform.isWindows) {
+      await ref.read(ttsProvider).stop();
+    }
     await ref.read(ttsProvider).speak(textToSpeak);
   }
 
@@ -470,8 +473,10 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                               child: Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(20),
-                                  color: Theme.of(context).brightness == Brightness.dark 
-                                      ? Theme.of(context).colorScheme.surface 
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Theme.of(context).colorScheme.surface
                                       : Colors.white.withValues(alpha: 0.8),
                                   border: Border.all(
                                     color: Colors.white.withValues(alpha: 0.08),
@@ -493,168 +498,245 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                                   ),
                                   child: Material(
                                     color: Colors.transparent,
-                                  child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (showImage)
-                                  Expanded(
-                                    flex: 4,
-                                    child: ClipRRect(
-                                      borderRadius: const BorderRadius.vertical(
-                                        top: Radius.circular(20),
-                                      ),
-                                      child: CachedNetworkImage(
-                                        imageUrl: q.word.imageUrl!,
-                                        fit: BoxFit.cover,
-                                        placeholder: (context, url) => const Center(
-                                          child: CircularProgressIndicator(),
-                                        ),
-                                        errorWidget:
-                                            (context, url, error) =>
-                                                const Center(
-                                                  child: Icon(
-                                                    Icons.broken_image,
-                                                    size: 48,
-                                                    color: Colors.grey,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        if (showImage)
+                                          Expanded(
+                                            flex: 4,
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  const BorderRadius.vertical(
+                                                    top: Radius.circular(20),
                                                   ),
-                                                ),
-                                      ),
-                                    ),
-                                  ),
-                                Expanded(
-                                  flex: showImage ? 5 : 1,
-                                  child: Stack(
-                                    children: [
-                                      GestureDetector(
-                                        onLongPress: () {
-                                          String textToCopy =
-                                              mainText.isNotEmpty
-                                              ? mainText
-                                              : q.word.japanese;
-                                          Clipboard.setData(
-                                            ClipboardData(text: textToCopy),
-                                          );
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                AppLocalizations.of(
-                                                  context,
-                                                )!.copiedToClipboard,
+                                              child: CachedNetworkImage(
+                                                imageUrl: q.word.imageUrl!,
+                                                fit: BoxFit.cover,
+                                                placeholder: (context, url) =>
+                                                    const Center(
+                                                      child:
+                                                          CircularProgressIndicator(),
+                                                    ),
+                                                errorWidget:
+                                                    (context, url, error) =>
+                                                        const Center(
+                                                          child: Icon(
+                                                            Icons.broken_image,
+                                                            size: 48,
+                                                            color: Colors.grey,
+                                                          ),
+                                                        ),
                                               ),
                                             ),
-                                          );
-                                        },
-                                        child: Center(
-                                          child: SingleChildScrollView(
-                                            child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                              if ((q.type == QuestionType.voiceToTrans ||
-                                                      q.type == QuestionType.voiceToJap ||
-                                                      q.type == QuestionType.voiceToJapInput ||
-                                                      q.type == QuestionType.voiceToJapConstructor ||
-                                                      q.type == QuestionType.imageToJap) &&
-                                                  !hasAnswered)
-                                                Column(
-                                                  children: [
-                                                    IconButton(
-                                                      icon: Icon(
-                                                        Icons.volume_up,
-                                                        size: showImage ? 56 : 80,
-                                                        color: primaryColor,
-                                                      ),
-                                                      onPressed: _playVoice,
+                                          ),
+                                        Expanded(
+                                          flex: showImage ? 5 : 1,
+                                          child: Stack(
+                                            children: [
+                                              GestureDetector(
+                                                onLongPress: () {
+                                                  String textToCopy =
+                                                      mainText.isNotEmpty
+                                                      ? mainText
+                                                      : q.word.japanese;
+                                                  Clipboard.setData(
+                                                    ClipboardData(
+                                                      text: textToCopy,
                                                     ),
-                                                    SizedBox(height: showImage ? 8 : 16),
-                                                    Text(
-                                                      AppLocalizations.of(
-                                                        context,
-                                                      )!.listenToTheWord,
-                                                      style: TextStyle(
-                                                        fontSize: showImage ? 18 : 24,
+                                                  );
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                        AppLocalizations.of(
+                                                          context,
+                                                        )!.copiedToClipboard,
                                                       ),
                                                     ),
-                                                  ],
-                                                )
-                                              else ...[
-                                                AutoSizeText(
-                                                  mainText,
-                                                  style: TextStyle(
-                                                    fontSize: showImage ? 32 : 48,
-                                                    fontWeight: FontWeight.bold,
+                                                  );
+                                                },
+                                                child: Center(
+                                                  child: SingleChildScrollView(
+                                                    child: Column(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        if ((q.type ==
+                                                                    QuestionType
+                                                                        .voiceToTrans ||
+                                                                q.type ==
+                                                                    QuestionType
+                                                                        .voiceToJap ||
+                                                                q.type ==
+                                                                    QuestionType
+                                                                        .voiceToJapInput ||
+                                                                q.type ==
+                                                                    QuestionType
+                                                                        .voiceToJapConstructor ||
+                                                                q.type ==
+                                                                    QuestionType
+                                                                        .imageToJap) &&
+                                                            !hasAnswered)
+                                                          Column(
+                                                            children: [
+                                                              IconButton(
+                                                                icon: Icon(
+                                                                  Icons
+                                                                      .volume_up,
+                                                                  size:
+                                                                      showImage
+                                                                      ? 56
+                                                                      : 80,
+                                                                  color:
+                                                                      primaryColor,
+                                                                ),
+                                                                onPressed:
+                                                                    _playVoice,
+                                                              ),
+                                                              SizedBox(
+                                                                height:
+                                                                    showImage
+                                                                    ? 8
+                                                                    : 16,
+                                                              ),
+                                                              Text(
+                                                                AppLocalizations.of(
+                                                                  context,
+                                                                )!.listenToTheWord,
+                                                                style: TextStyle(
+                                                                  fontSize:
+                                                                      showImage
+                                                                      ? 18
+                                                                      : 24,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          )
+                                                        else ...[
+                                                          AutoSizeText(
+                                                            mainText,
+                                                            style: TextStyle(
+                                                              fontSize:
+                                                                  showImage
+                                                                  ? 32
+                                                                  : 48,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                            ),
+                                                            textAlign: TextAlign
+                                                                .center,
+                                                            maxLines: 3,
+                                                            minFontSize:
+                                                                showImage
+                                                                ? 16
+                                                                : 24,
+                                                          ),
+                                                          if (subText != null &&
+                                                              subText
+                                                                  .isNotEmpty)
+                                                            Padding(
+                                                              padding:
+                                                                  EdgeInsets.only(
+                                                                    top:
+                                                                        showImage
+                                                                        ? 4.0
+                                                                        : 8.0,
+                                                                  ),
+                                                              child: Text(
+                                                                subText,
+                                                                style: TextStyle(
+                                                                  fontSize:
+                                                                      showImage
+                                                                      ? 18
+                                                                      : 24,
+                                                                  color: Theme.of(context)
+                                                                      .extension<
+                                                                        AppColorsExtension
+                                                                      >()!
+                                                                      .textSecondary,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          if (showTranslation)
+                                                            Padding(
+                                                              padding:
+                                                                  EdgeInsets.only(
+                                                                    top:
+                                                                        showImage
+                                                                        ? 8.0
+                                                                        : 16.0,
+                                                                  ),
+                                                              child: Text(
+                                                                q
+                                                                    .word
+                                                                    .translation,
+                                                                style: TextStyle(
+                                                                  fontSize:
+                                                                      showImage
+                                                                      ? 16
+                                                                      : 20,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w500,
+                                                                ),
+                                                                textAlign:
+                                                                    TextAlign
+                                                                        .center,
+                                                              ),
+                                                            ),
+                                                        ],
+                                                      ],
+                                                    ),
                                                   ),
-                                                  textAlign: TextAlign.center,
-                                                  maxLines: 3,
-                                                  minFontSize: showImage ? 16 : 24,
                                                 ),
-                                                if (subText != null &&
-                                                    subText.isNotEmpty)
-                                                  Padding(
-                                                    padding: EdgeInsets.only(
-                                                      top: showImage ? 4.0 : 8.0,
+                                              ),
+                                              // Hide small mic if:
+                                              // 1. Not answered and type is Trans->Jap (to avoid hint)
+                                              // 2. Not answered and type is Auditory (because big mic is shown)
+                                              if (!(!hasAnswered &&
+                                                  (q.type ==
+                                                          QuestionType
+                                                              .transToJap ||
+                                                      q.type ==
+                                                          QuestionType
+                                                              .transToJapInput ||
+                                                      q.type ==
+                                                          QuestionType
+                                                              .transToJapConstructor ||
+                                                      q.type ==
+                                                          QuestionType
+                                                              .voiceToTrans ||
+                                                      q.type ==
+                                                          QuestionType
+                                                              .voiceToJap ||
+                                                      q.type ==
+                                                          QuestionType
+                                                              .voiceToJapInput ||
+                                                      q.type ==
+                                                          QuestionType
+                                                              .voiceToJapConstructor ||
+                                                      q.type ==
+                                                          QuestionType
+                                                              .imageToJap)))
+                                                Positioned(
+                                                  top: 8,
+                                                  right: 8,
+                                                  child: IconButton(
+                                                    icon: Icon(
+                                                      Icons.volume_up,
+                                                      size: 32,
+                                                      color: primaryColor,
                                                     ),
-                                                    child: Text(
-                                                      subText,
-                                                      style: TextStyle(
-                                                        fontSize: showImage ? 18 : 24,
-                                                        color: Theme.of(context)
-                                                            .extension<
-                                                              AppColorsExtension
-                                                            >()!
-                                                            .textSecondary,
-                                                      ),
-                                                    ),
+                                                    onPressed: _playVoice,
                                                   ),
-                                                if (showTranslation)
-                                                  Padding(
-                                                    padding: EdgeInsets.only(
-                                                      top: showImage ? 8.0 : 16.0,
-                                                    ),
-                                                    child: Text(
-                                                      q.word.translation,
-                                                      style: TextStyle(
-                                                        fontSize: showImage ? 16 : 20,
-                                                        fontWeight: FontWeight.w500,
-                                                      ),
-                                                      textAlign: TextAlign.center,
-                                                    ),
-                                                  ),
-                                              ],
+                                                ),
                                             ],
                                           ),
                                         ),
-                                      ),
-                                    ),
-                                      // Hide small mic if:
-                                      // 1. Not answered and type is Trans->Jap (to avoid hint)
-                                      // 2. Not answered and type is Auditory (because big mic is shown)
-                                      if (!(!hasAnswered &&
-                                          (q.type == QuestionType.transToJap ||
-                                              q.type == QuestionType.transToJapInput ||
-                                              q.type == QuestionType.transToJapConstructor ||
-                                              q.type == QuestionType.voiceToTrans ||
-                                              q.type == QuestionType.voiceToJap ||
-                                              q.type == QuestionType.voiceToJapInput ||
-                                              q.type == QuestionType.voiceToJapConstructor ||
-                                              q.type == QuestionType.imageToJap)))
-                                        Positioned(
-                                          top: 8,
-                                          right: 8,
-                                          child: IconButton(
-                                            icon: Icon(
-                                              Icons.volume_up,
-                                              size: 32,
-                                              color: primaryColor,
-                                            ),
-                                            onPressed: _playVoice,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
                                       ],
                                     ),
                                   ),
@@ -679,11 +761,15 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                           Center(
                             child: Padding(
                               padding: const EdgeInsets.all(8.0),
-                              child: (!hasAnswered &&
+                              child:
+                                  (!hasAnswered &&
                                       (q.type == QuestionType.voiceToTrans ||
                                           q.type == QuestionType.voiceToJap ||
-                                          q.type == QuestionType.voiceToJapInput ||
-                                          q.type == QuestionType.voiceToJapConstructor ||
+                                          q.type ==
+                                              QuestionType.voiceToJapInput ||
+                                          q.type ==
+                                              QuestionType
+                                                  .voiceToJapConstructor ||
                                           q.type == QuestionType.imageToJap))
                                   ? IconButton(
                                       padding: EdgeInsets.zero,
@@ -827,43 +913,43 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
             children: [
               Expanded(
                 child: TextField(
-                controller: _textController,
-                enabled: !hasAnswered,
-                decoration: InputDecoration(
-                  hintText: AppLocalizations.of(context)!.typeYourAnswer,
-                  border: OutlineInputBorder(
-                    borderSide: borderColor != null
-                        ? BorderSide(color: borderColor, width: 2)
-                        : const BorderSide(),
+                  controller: _textController,
+                  enabled: !hasAnswered,
+                  decoration: InputDecoration(
+                    hintText: AppLocalizations.of(context)!.typeYourAnswer,
+                    border: OutlineInputBorder(
+                      borderSide: borderColor != null
+                          ? BorderSide(color: borderColor, width: 2)
+                          : const BorderSide(),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: borderColor != null
+                          ? BorderSide(color: borderColor, width: 2)
+                          : const BorderSide(),
+                    ),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: borderColor != null
-                        ? BorderSide(color: borderColor, width: 2)
-                        : const BorderSide(),
-                  ),
+                  onSubmitted: (val) {
+                    if (!hasAnswered && val.trim().isNotEmpty) {
+                      _onOptionSelected(val.trim());
+                    }
+                  },
                 ),
-                onSubmitted: (val) {
-                  if (!hasAnswered && val.trim().isNotEmpty) {
-                    _onOptionSelected(val.trim());
-                  }
+              ),
+              const SizedBox(width: 8),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _textController,
+                builder: (context, value, child) {
+                  return IconButton(
+                    icon: Icon(Icons.send),
+                    color: Theme.of(context).colorScheme.primary,
+                    onPressed: (!hasAnswered && value.text.trim().isNotEmpty)
+                        ? () => _onOptionSelected(value.text.trim())
+                        : null,
+                  );
                 },
               ),
-            ),
-            const SizedBox(width: 8),
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _textController,
-              builder: (context, value, child) {
-                return IconButton(
-                  icon: Icon(Icons.send),
-                  color: Theme.of(context).colorScheme.primary,
-                  onPressed: (!hasAnswered && value.text.trim().isNotEmpty)
-                      ? () => _onOptionSelected(value.text.trim())
-                      : null,
-                );
-              },
-            ),
-          ],
-        ),
+            ],
+          ),
         if (hasAnswered)
           Padding(
             padding: const EdgeInsets.only(top: 16.0),
@@ -938,11 +1024,13 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: _selectedCharIndices.isEmpty
-                  ? const Center(child: Text(" ", style: TextStyle(fontSize: 24)))
+                  ? const Center(
+                      child: Text(" ", style: TextStyle(fontSize: 24)),
+                    )
                   : Theme(
-                      data: Theme.of(context).copyWith(
-                        canvasColor: Colors.transparent,
-                      ),
+                      data: Theme.of(
+                        context,
+                      ).copyWith(canvasColor: Colors.transparent),
                       child: ReorderableListView.builder(
                         scrollDirection: Axis.horizontal,
                         buildDefaultDragHandles: false,
@@ -952,7 +1040,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                             if (oldIndex < newIndex) {
                               newIndex -= 1;
                             }
-                            final item = _selectedCharIndices.removeAt(oldIndex);
+                            final item = _selectedCharIndices.removeAt(
+                              oldIndex,
+                            );
                             _selectedCharIndices.insert(newIndex, item);
                           });
                         },
@@ -963,9 +1053,14 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                             key: ValueKey('chip_${charIndex}_$index'),
                             index: index,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4.0,
+                              ),
                               child: InputChip(
-                                label: Text(char, style: const TextStyle(fontSize: 20)),
+                                label: Text(
+                                  char,
+                                  style: const TextStyle(fontSize: 20),
+                                ),
                                 onDeleted: () {
                                   setState(() {
                                     _selectedCharIndices.removeAt(index);
@@ -979,87 +1074,87 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                       ),
                     ),
             ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          alignment: WrapAlignment.center,
-          children: List.generate(q.options.length, (index) {
-            final isSelected = _selectedCharIndices.contains(index);
-            return ElevatedButton(
-              onPressed: hasAnswered
-                  ? null
-                  : () {
-                      setState(() {
-                        if (isSelected) {
-                          _selectedCharIndices.remove(index);
-                        } else {
-                          _selectedCharIndices.add(index);
-                        }
-                      });
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isSelected ? Colors.grey[300] : null,
-                foregroundColor: isSelected ? Colors.grey[600] : null,
-              ),
-              child: Text(q.options[index], style: TextStyle(fontSize: 20)),
-            );
-          }),
-        ),
-        const SizedBox(height: 24),
-        ElevatedButton(
-          onPressed: (!hasAnswered && constructedWord.isNotEmpty)
-              ? () => _onOptionSelected(constructedWord)
-              : null,
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          child: Text(
-            AppLocalizations.of(context)!.submitAnswer,
-            style: TextStyle(fontSize: 18),
-          ),
-        ),
-        ],
-        if (hasAnswered)
-          Padding(
-            padding: const EdgeInsets.only(top: 16.0),
-            child: Column(
-              children: [
-                Text(
-                  AppLocalizations.of(
-                    context,
-                  )!.yourAnswer(selectedOption ?? ''),
-                  style: TextStyle(
-                    color: selectedOption == q.correctAnswer
-                        ? Theme.of(
-                            context,
-                          ).extension<AppColorsExtension>()!.success
-                        : Theme.of(context).colorScheme.error,
-                    fontSize: 18,
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: List.generate(q.options.length, (index) {
+                final isSelected = _selectedCharIndices.contains(index);
+                return ElevatedButton(
+                  onPressed: hasAnswered
+                      ? null
+                      : () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedCharIndices.remove(index);
+                            } else {
+                              _selectedCharIndices.add(index);
+                            }
+                          });
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isSelected ? Colors.grey[300] : null,
+                    foregroundColor: isSelected ? Colors.grey[600] : null,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                if (selectedOption != q.correctAnswer)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      AppLocalizations.of(
-                        context,
-                      )!.correctAnswer(q.correctAnswer),
-                      style: TextStyle(
-                        color: Theme.of(
-                          context,
-                        ).extension<AppColorsExtension>()!.success,
-                        fontSize: 18,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-              ],
+                  child: Text(q.options[index], style: TextStyle(fontSize: 20)),
+                );
+              }),
             ),
-          ),
-      ],
-    ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: (!hasAnswered && constructedWord.isNotEmpty)
+                  ? () => _onOptionSelected(constructedWord)
+                  : null,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: Text(
+                AppLocalizations.of(context)!.submitAnswer,
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+          ],
+          if (hasAnswered)
+            Padding(
+              padding: const EdgeInsets.only(top: 16.0),
+              child: Column(
+                children: [
+                  Text(
+                    AppLocalizations.of(
+                      context,
+                    )!.yourAnswer(selectedOption ?? ''),
+                    style: TextStyle(
+                      color: selectedOption == q.correctAnswer
+                          ? Theme.of(
+                              context,
+                            ).extension<AppColorsExtension>()!.success
+                          : Theme.of(context).colorScheme.error,
+                      fontSize: 18,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (selectedOption != q.correctAnswer)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        AppLocalizations.of(
+                          context,
+                        )!.correctAnswer(q.correctAnswer),
+                        style: TextStyle(
+                          color: Theme.of(
+                            context,
+                          ).extension<AppColorsExtension>()!.success,
+                          fontSize: 18,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 

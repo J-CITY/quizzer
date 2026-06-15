@@ -8,6 +8,18 @@ import 'data/services/notification_service.dart';
 import 'data/services/google_sheets_service.dart';
 import 'ui/home_screen.dart';
 import 'package:quizzer/utils/constants.dart';
+import 'package:quizzer/services/ads_service.dart';
+import 'package:quizzer/services/iap_service.dart';
+
+// Create providers for new services
+final adsServiceProvider = Provider<AdsService>((ref) {
+  return AdsService(ref.read(databaseServiceProvider));
+});
+
+final iapServiceProvider = ChangeNotifierProvider<IapService>((ref) {
+  return IapService(ref.read(databaseServiceProvider));
+});
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +27,14 @@ void main() async {
 
   final dbService = DatabaseService();
   await dbService.init();
+
+  // Initialize Ads
+  final adsService = AdsService(dbService);
+  await adsService.init();
+
+  // Initialize IAP
+  final iapService = IapService(dbService);
+  await iapService.init();
 
   await NotificationService.init();
   final settings = await dbService.getSettings();
@@ -42,7 +62,11 @@ void main() async {
 
   runApp(
     ProviderScope(
-      overrides: [databaseServiceProvider.overrideWithValue(dbService)],
+      overrides: [
+        databaseServiceProvider.overrideWithValue(dbService),
+        adsServiceProvider.overrideWithValue(adsService),
+        iapServiceProvider.overrideWith((ref) => iapService),
+      ],
       child: const QuizzerApp(),
     ),
   );

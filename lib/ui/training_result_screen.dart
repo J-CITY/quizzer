@@ -8,6 +8,7 @@ import 'training_screen.dart'; // for ttsProvider
 import 'widgets/acrylic_card.dart';
 import 'widgets/glow_button.dart';
 import 'widgets/ripple_animation.dart';
+import '../main.dart'; // To get adsServiceProvider
 
 class TrainingResultScreen extends ConsumerStatefulWidget {
   final List<Word> mistakes;
@@ -38,6 +39,11 @@ class _TrainingResultScreenState extends ConsumerState<TrainingResultScreen> {
     if (widget.mistakes.isEmpty) {
       _confettiController.play();
     }
+
+    // Show interstitial ad if applicable
+    Future.microtask(() {
+      ref.read(adsServiceProvider).showInterstitialAd();
+    });
   }
 
   @override

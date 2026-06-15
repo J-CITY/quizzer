@@ -9,6 +9,20 @@ class AppConstants {
   static const String notificationIcon = '@drawable/ic_launcher_foreground';
 }
 
+class IapConstants {
+  static const String removeAdsProductId = 'remove_ads_product';
+}
+
+class AdConstants {
+  // Test AdMob App ID
+  static const String androidAppId = 'ca-app-pub-3940256099942544~3347511713';
+  static const String iosAppId = 'ca-app-pub-3940256099942544~1458002511';
+
+  // Test Interstitial Ad Unit IDs
+  static const String androidInterstitialAdUnitId = 'ca-app-pub-3940256099942544/1033173712';
+  static const String iosInterstitialAdUnitId = 'ca-app-pub-3940256099942544/4411468910';
+}
+
 class AppColorsExtension extends ThemeExtension<AppColorsExtension> {
   final Color success;
   final Color chart;

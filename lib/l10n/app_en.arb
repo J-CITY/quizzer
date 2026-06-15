@@ -192,5 +192,10 @@
   "saveWord": "Save Word",
   "selectListForWord": "Select list to save to",
   "errorNoListSelected": "Please select or create a list first",
-  "wordSaved": "Word saved successfully"
+  "wordSaved": "Word saved successfully",
+  "removeAdsButton": "Remove ads for $1",
+  "restorePurchasesButton": "Restore purchases",
+  "purchaseSuccess": "Ads successfully removed!",
+  "purchaseError": "Error during purchase. Please try again.",
+  "purchaseRestored": "Purchases successfully restored!"
 }

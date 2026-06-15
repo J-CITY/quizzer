@@ -2,7 +2,7 @@
 
 An advanced app for learning foreign words effectively with spaced repetition and various interactive question types.
 
-![Screenshot](https://github.com/J-CITY/quizzer/blob/main/screenshot/image.png)
+![Screenshot](https://github.com/J-CITY/quizzer/blob/master/screenshot/image.png)
 
 [Trello Board](https://trello.com/b/jpgn0AG8/quizzer)
 

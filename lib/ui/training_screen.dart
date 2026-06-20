@@ -137,7 +137,8 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
           (q.type == QuestionType.transToJap ||
               q.type == QuestionType.transToJapInput ||
               q.type == QuestionType.transToJapConstructor ||
-              q.type == QuestionType.imageToJap)) {
+              q.type == QuestionType.imageToJap ||
+              q.type == QuestionType.japToReading)) {
         return;
       }
 
@@ -728,7 +729,10 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                                                               .voiceToJapConstructor ||
                                                       q.type ==
                                                           QuestionType
-                                                              .imageToJap)))
+                                                              .imageToJap ||
+                                                      q.type ==
+                                                          QuestionType
+                                                              .japToReading)))
                                                 Positioned(
                                                   top: 8,
                                                   right: 8,

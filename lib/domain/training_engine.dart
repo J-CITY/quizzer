@@ -180,14 +180,44 @@ class TrainingEngine {
       case QuestionType.japToReading:
         prompt = word.japanese;
         correctAnswer = word.reading!;
-        wrongOptions = _getWrongOptions(
-          allWords,
-          word,
-          (w) => w.reading,
-          true,
-          settings,
-          l10n,
-        );
+        if (word.reading!.contains('/')) {
+          final correctReadings = word.reading!.split('/').map((e) => e.trim()).toList();
+          
+          wrongOptions = _getWrongOptions(
+            allWords,
+            word,
+            (w) => w.reading,
+            true,
+            settings,
+            l10n,
+          );
+
+          Set<String> allWrongChips = {};
+          for (var w in wrongOptions) {
+            allWrongChips.addAll(w.split('/').map((e) => e.trim()));
+          }
+          allWrongChips.removeAll(correctReadings);
+
+          const int maxMultipleChoiceOptions = 8;
+          int targetWrongCount = maxMultipleChoiceOptions - correctReadings.length;
+          if (targetWrongCount < correctReadings.length) {
+              targetWrongCount = correctReadings.length;
+          }
+          final wrongList = allWrongChips.toList()..shuffle(_random);
+          final selectedWrong = wrongList.take(targetWrongCount).toList();
+
+          customOptions = [...correctReadings, ...selectedWrong]..shuffle(_random);
+          wrongOptions = [];
+        } else {
+          wrongOptions = _getWrongOptions(
+            allWords,
+            word,
+            (w) => w.reading,
+            true,
+            settings,
+            l10n,
+          );
+        }
         break;
       case QuestionType.readingToJap:
         prompt = word.reading!;
@@ -260,7 +290,7 @@ class TrainingEngine {
         correctAnswer = word.japanese;
 
         final correctChars = word.japanese.split('');
-        final extraCharsCount = min(6, correctChars.length);
+        final extraCharsCount = _random.nextInt(correctChars.length + 2) + 1;
         final extraChars = <String>[];
         final allChars = allWords.map((w) => w.japanese).join('').split('');
         allChars.shuffle(_random);
@@ -287,7 +317,7 @@ class TrainingEngine {
         correctAnswer = word.japanese;
 
         final correctChars2 = word.japanese.split('');
-        final extraCharsCount2 = min(6, correctChars2.length);
+        final extraCharsCount2 = _random.nextInt(correctChars2.length + 2) + 1;
         final extraChars2 = <String>[];
         final allChars2 = allWords.map((w) => w.japanese).join('').split('');
         allChars2.shuffle(_random);

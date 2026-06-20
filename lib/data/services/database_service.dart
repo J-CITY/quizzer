@@ -3,6 +3,7 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/word.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/custom_list.dart';
 import '../models/settings.dart';
 import '../models/training_session.dart';
@@ -97,6 +98,17 @@ class DatabaseService {
           lWord.japanese = dWord.japanese;
           lWord.reading = dWord.reading;
           lWord.translation = dWord.translation;
+
+          if (lWord.imageUrl != dWord.imageUrl) {
+            if (lWord.imageUrl != null && lWord.imageUrl!.isNotEmpty) {
+              try {
+                CachedNetworkImage.evictFromCache(lWord.imageUrl!);
+              } catch (_) {}
+            }
+          }
+
+          lWord.imageUrl = dWord.imageUrl;
+          lWord.mnemonic = dWord.mnemonic;
           updatedOrNewWords.add(lWord);
         } else {
           updatedOrNewWords.add(dWord);
@@ -126,6 +138,7 @@ class DatabaseService {
 
     final wordsToUpdate = <Word>[];
     for (var word in learnedWords) {
+      if (word.isManuallyLearned) continue;
       if (word.lastTrained != null) {
         final diff = now.difference(word.lastTrained!).inDays;
         if (diff >= 7) {
@@ -156,6 +169,7 @@ class DatabaseService {
 
   Future<void> toggleWordLearned(Word word, bool isLearned) async {
     word.progress = isLearned ? 5 : 0;
+    word.isManuallyLearned = isLearned;
     // Removed logic of preserving previous progress based on user's comment
     word.lastTrained = DateTime.now();
     await isar.writeTxn(() async {

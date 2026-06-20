@@ -21,6 +21,8 @@ class Word {
 
   int progress = 0; // 0 to 5
 
+  bool isManuallyLearned = false;
+
   DateTime? lastTrained;
 
   int orderIndex = 0;

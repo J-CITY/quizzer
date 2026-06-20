@@ -123,10 +123,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setStateBottomSheet) {
-            Widget buildCheck(String title, bool value, Function(bool) onChanged) {
+            Widget buildCheck(String title, String desc, bool value, Function(bool) onChanged) {
               return CheckboxListTile(
                 title: Text(title),
                 value: value,
+                secondary: IconButton(
+                  icon: const Icon(Icons.info_outline),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text(title),
+                        content: Text(desc),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
                 onChanged: (val) {
                   if (val != null) {
                     setStateBottomSheet(() {
@@ -155,17 +173,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 16),
-                    buildCheck(AppLocalizations.of(context)!.questionWordToTranslate, settings.questionWordToTranslate, (v) => settings.questionWordToTranslate = v),
-                    buildCheck(AppLocalizations.of(context)!.questionTranslateToWord, settings.questionTranslateToWord, (v) => settings.questionTranslateToWord = v),
-                    buildCheck(AppLocalizations.of(context)!.questionWordToReading, settings.questionWordToReading, (v) => settings.questionWordToReading = v),
-                    buildCheck(AppLocalizations.of(context)!.questionReadingToWord, settings.questionReadingToWord, (v) => settings.questionReadingToWord = v),
-                    buildCheck(AppLocalizations.of(context)!.questionVoiceToTranslate, settings.questionVoiceToTranslate, (v) => settings.questionVoiceToTranslate = v),
-                    buildCheck(AppLocalizations.of(context)!.questionVoiceToWord, settings.questionVoiceToWord, (v) => settings.questionVoiceToWord = v),
-                    buildCheck(AppLocalizations.of(context)!.questionVoiceToWordInput, settings.questionVoiceToWordInput, (v) => settings.questionVoiceToWordInput = v),
-                    buildCheck(AppLocalizations.of(context)!.questionVoiceToWordConstructor, settings.questionVoiceToWordConstructor, (v) => settings.questionVoiceToWordConstructor = v),
-                    buildCheck(AppLocalizations.of(context)!.questionTranslateToWordInput, settings.questionTranslateToWordInput, (v) => settings.questionTranslateToWordInput = v),
-                    buildCheck(AppLocalizations.of(context)!.questionTranslateToWordConstructor, settings.questionTranslateToWordConstructor, (v) => settings.questionTranslateToWordConstructor = v),
-                    buildCheck(AppLocalizations.of(context)!.questionImageToWord, settings.questionImageToWord, (v) => settings.questionImageToWord = v),
+                    buildCheck(AppLocalizations.of(context)!.questionWordToTranslate, AppLocalizations.of(context)!.questionWordToTranslateDesc, settings.questionWordToTranslate, (v) => settings.questionWordToTranslate = v),
+                    buildCheck(AppLocalizations.of(context)!.questionTranslateToWord, AppLocalizations.of(context)!.questionTranslateToWordDesc, settings.questionTranslateToWord, (v) => settings.questionTranslateToWord = v),
+                    buildCheck(AppLocalizations.of(context)!.questionWordToReading, AppLocalizations.of(context)!.questionWordToReadingDesc, settings.questionWordToReading, (v) => settings.questionWordToReading = v),
+                    buildCheck(AppLocalizations.of(context)!.questionReadingToWord, AppLocalizations.of(context)!.questionReadingToWordDesc, settings.questionReadingToWord, (v) => settings.questionReadingToWord = v),
+                    buildCheck(AppLocalizations.of(context)!.questionVoiceToTranslate, AppLocalizations.of(context)!.questionVoiceToTranslateDesc, settings.questionVoiceToTranslate, (v) => settings.questionVoiceToTranslate = v),
+                    buildCheck(AppLocalizations.of(context)!.questionVoiceToWord, AppLocalizations.of(context)!.questionVoiceToWordDesc, settings.questionVoiceToWord, (v) => settings.questionVoiceToWord = v),
+                    buildCheck(AppLocalizations.of(context)!.questionVoiceToWordInput, AppLocalizations.of(context)!.questionVoiceToWordInputDesc, settings.questionVoiceToWordInput, (v) => settings.questionVoiceToWordInput = v),
+                    buildCheck(AppLocalizations.of(context)!.questionVoiceToWordConstructor, AppLocalizations.of(context)!.questionVoiceToWordConstructorDesc, settings.questionVoiceToWordConstructor, (v) => settings.questionVoiceToWordConstructor = v),
+                    buildCheck(AppLocalizations.of(context)!.questionTranslateToWordInput, AppLocalizations.of(context)!.questionTranslateToWordInputDesc, settings.questionTranslateToWordInput, (v) => settings.questionTranslateToWordInput = v),
+                    buildCheck(AppLocalizations.of(context)!.questionTranslateToWordConstructor, AppLocalizations.of(context)!.questionTranslateToWordConstructorDesc, settings.questionTranslateToWordConstructor, (v) => settings.questionTranslateToWordConstructor = v),
+                    buildCheck(AppLocalizations.of(context)!.questionImageToWord, AppLocalizations.of(context)!.questionImageToWordDesc, settings.questionImageToWord, (v) => settings.questionImageToWord = v),
                   ],
                 );
               },
@@ -584,6 +602,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     trailing: const Icon(Icons.delete_outline, color: Colors.red),
                     onTap: () async {
                       await DefaultCacheManager().emptyCache();
+                      PaintingBinding.instance.imageCache.clear();
+                      PaintingBinding.instance.imageCache.clearLiveImages();
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text(AppLocalizations.of(context)!.imageCacheCleared)),

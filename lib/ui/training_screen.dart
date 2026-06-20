@@ -46,6 +46,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
 
   final TextEditingController _textController = TextEditingController();
   final List<int> _selectedCharIndices = [];
+  final Set<int> _selectedMultiIndices = {};
 
   // Maps question index to the user's selected answer string.
   final Map<int, String> _userAnswers = {};
@@ -171,12 +172,16 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     final wordId = q.word.id;
     final settings = await ref.read(databaseServiceProvider).getSettings();
 
-    bool isCorrect = option == q.correctAnswer;
+    bool isCorrect = option.trim() == q.correctAnswer.trim();
     if (q.type == QuestionType.transToJapInput ||
         q.type == QuestionType.voiceToJapInput) {
       isCorrect =
-          (option == q.word.japanese) ||
-          (q.word.reading != null && option == q.word.reading);
+          (option.trim() == q.word.japanese.trim()) ||
+          (q.word.reading != null && option.trim() == q.word.reading!.trim());
+    } else if (q.type == QuestionType.japToReading && q.correctAnswer.contains('/')) {
+      final selectedSet = option.split('/').map((e) => e.trim()).toSet();
+      final correctSet = q.correctAnswer.split('/').map((e) => e.trim()).toSet();
+      isCorrect = selectedSet.length == correctSet.length && selectedSet.containsAll(correctSet);
     }
 
     if (settings.playSoundEffects) {
@@ -224,6 +229,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   void _goForward() {
     _textController.clear();
     _selectedCharIndices.clear();
+    _selectedMultiIndices.clear();
     if (_currentIndex < _questions.length - 1) {
       setState(() {
         _currentIndex++;
@@ -237,6 +243,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   void _goBack() {
     _textController.clear();
     _selectedCharIndices.clear();
+    _selectedMultiIndices.clear();
     if (_currentIndex > 0) {
       setState(() {
         _currentIndex--;
@@ -877,6 +884,8 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     } else if (q.type == QuestionType.transToJapConstructor ||
         q.type == QuestionType.voiceToJapConstructor) {
       return _buildConstructorArea(q, hasAnswered, selectedOption);
+    } else if (q.type == QuestionType.japToReading && q.correctAnswer.contains('/')) {
+      return _buildMultiSelectionArea(q, hasAnswered, selectedOption);
     } else {
       return _buildMultipleChoiceArea(q, hasAnswered, selectedOption);
     }
@@ -889,12 +898,12 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   ) {
     Color? borderColor;
     if (hasAnswered) {
-      bool isCorrect = selectedOption == q.correctAnswer;
+      bool isCorrect = selectedOption?.trim() == q.correctAnswer.trim();
       if (q.type == QuestionType.transToJapInput ||
           q.type == QuestionType.voiceToJapInput) {
         isCorrect =
-            (selectedOption == q.word.japanese) ||
-            (q.word.reading != null && selectedOption == q.word.reading);
+            (selectedOption?.trim() == q.word.japanese.trim()) ||
+            (q.word.reading != null && selectedOption?.trim() == q.word.reading!.trim());
       }
       if (isCorrect) {
         borderColor = Theme.of(
@@ -960,13 +969,16 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                     context,
                   )!.yourAnswer(selectedOption ?? ''),
                   style: TextStyle(
-                    color:
-                        (selectedOption == q.correctAnswer ||
-                            ((q.type == QuestionType.transToJapInput ||
-                                    q.type == QuestionType.voiceToJapInput) &&
-                                ((selectedOption == q.word.japanese) ||
-                                    (q.word.reading != null &&
-                                        selectedOption == q.word.reading))))
+                    color: (() {
+                      bool isCorrect = selectedOption?.trim() == q.correctAnswer.trim();
+                      if (q.type == QuestionType.transToJapInput ||
+                          q.type == QuestionType.voiceToJapInput) {
+                        isCorrect =
+                            (selectedOption?.trim() == q.word.japanese.trim()) ||
+                            (q.word.reading != null && selectedOption?.trim() == q.word.reading!.trim());
+                      }
+                      return isCorrect;
+                    })()
                         ? Theme.of(
                             context,
                           ).extension<AppColorsExtension>()!.success
@@ -974,12 +986,16 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                     fontSize: 18,
                   ),
                 ),
-                if (!(selectedOption == q.correctAnswer ||
-                    ((q.type == QuestionType.transToJapInput ||
-                            q.type == QuestionType.voiceToJapInput) &&
-                        ((selectedOption == q.word.japanese) ||
-                            (q.word.reading != null &&
-                                selectedOption == q.word.reading)))))
+                if (!(() {
+                      bool isCorrect = selectedOption?.trim() == q.correctAnswer.trim();
+                      if (q.type == QuestionType.transToJapInput ||
+                          q.type == QuestionType.voiceToJapInput) {
+                        isCorrect =
+                            (selectedOption?.trim() == q.word.japanese.trim()) ||
+                            (q.word.reading != null && selectedOption?.trim() == q.word.reading!.trim());
+                      }
+                      return isCorrect;
+                    })())
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
@@ -1145,6 +1161,121 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                           color: Theme.of(
                             context,
                           ).extension<AppColorsExtension>()!.success,
+                          fontSize: 18,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMultiSelectionArea(
+    Question q,
+    bool hasAnswered,
+    String? selectedOption,
+  ) {
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: List.generate(q.options.length, (index) {
+              final isSelected = _selectedMultiIndices.contains(index);
+              final option = q.options[index];
+              Color? buttonColor;
+              Color? textColor;
+              
+              if (hasAnswered) {
+                 final correctSet = q.correctAnswer.split('/').map((e) => e.trim()).toSet();
+                 final selectedSet = selectedOption?.split('/').map((e) => e.trim()).toSet() ?? {};
+                 if (correctSet.contains(option)) {
+                   buttonColor = Theme.of(context).extension<AppColorsExtension>()!.success;
+                   textColor = buttonColor;
+                 } else if (selectedSet.contains(option)) {
+                   buttonColor = Theme.of(context).colorScheme.error;
+                   textColor = buttonColor;
+                 }
+              }
+
+              return ElevatedButton(
+                onPressed: hasAnswered
+                    ? null
+                    : () {
+                        setState(() {
+                          if (isSelected) {
+                            _selectedMultiIndices.remove(index);
+                          } else {
+                            _selectedMultiIndices.add(index);
+                          }
+                        });
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: buttonColor ?? (isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2) : null),
+                  foregroundColor: textColor ?? (isSelected ? Theme.of(context).colorScheme.primary : null),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                child: Text(option, style: const TextStyle(fontSize: 18)),
+              );
+            }),
+          ),
+          const SizedBox(height: 24),
+          if (!hasAnswered)
+            ElevatedButton(
+              onPressed: _selectedMultiIndices.isNotEmpty
+                  ? () {
+                      final selectedVals = _selectedMultiIndices.map((i) => q.options[i]).toList();
+                      selectedVals.sort();
+                      _onOptionSelected(selectedVals.join(' / '));
+                    }
+                  : null,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: Text(
+                AppLocalizations.of(context)!.submitAnswer,
+                style: const TextStyle(fontSize: 18),
+              ),
+            ),
+          if (hasAnswered)
+            Padding(
+              padding: const EdgeInsets.only(top: 16.0),
+              child: Column(
+                children: [
+                  Text(
+                    AppLocalizations.of(context)!.yourAnswer(selectedOption ?? ''),
+                    style: TextStyle(
+                      color: (() {
+                        final selectedSet = selectedOption?.split('/').map((e) => e.trim()).toSet() ?? {};
+                        final correctSet = q.correctAnswer.split('/').map((e) => e.trim()).toSet();
+                        final isCorrect = selectedSet.length == correctSet.length && selectedSet.containsAll(correctSet);
+                        return isCorrect
+                            ? Theme.of(context).extension<AppColorsExtension>()!.success
+                            : Theme.of(context).colorScheme.error;
+                      })(),
+                      fontSize: 18,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (!(() {
+                        final selectedSet = selectedOption?.split('/').map((e) => e.trim()).toSet() ?? {};
+                        final correctSet = q.correctAnswer.split('/').map((e) => e.trim()).toSet();
+                        return selectedSet.length == correctSet.length && selectedSet.containsAll(correctSet);
+                      })())
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        AppLocalizations.of(context)!.correctAnswer(q.correctAnswer),
+                        style: TextStyle(
+                          color: Theme.of(context).extension<AppColorsExtension>()!.success,
                           fontSize: 18,
                         ),
                         textAlign: TextAlign.center,

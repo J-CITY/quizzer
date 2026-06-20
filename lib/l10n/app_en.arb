@@ -84,6 +84,17 @@
   "questionVoiceToWordConstructor": "Audio -> Target (constructor)",
   "questionTranslateToWordInput": "Translation -> Target (input)",
   "questionTranslateToWordConstructor": "Translation -> Target (constructor)",
+  "questionWordToTranslateDesc": "Question: Target word\nAnswer: Native translation",
+  "questionTranslateToWordDesc": "Question: Native translation\nAnswer: Target word",
+  "questionImageToWordDesc": "Question: Image\nAnswer: Target word",
+  "questionWordToReadingDesc": "Question: Target word\nAnswer: Reading (transcription)",
+  "questionReadingToWordDesc": "Question: Reading (transcription)\nAnswer: Target word",
+  "questionVoiceToTranslateDesc": "Question: Audio of target word\nAnswer: Translation",
+  "questionVoiceToWordDesc": "Question: Audio of target word\nAnswer: Target word",
+  "questionVoiceToWordInputDesc": "Question: Audio of target word\nAnswer: Type the target word",
+  "questionVoiceToWordConstructorDesc": "Question: Audio of target word\nAnswer: Construct word from characters",
+  "questionTranslateToWordInputDesc": "Question: Translation\nAnswer: Type the target word",
+  "questionTranslateToWordConstructorDesc": "Question: Translation\nAnswer: Construct word from characters",
   "listenToTheWord": "Listen to the word",
   "submitAnswer": "Submit",
   "typeYourAnswer": "Type your answer...",
@@ -197,5 +208,6 @@
   "restorePurchasesButton": "Restore purchases",
   "purchaseSuccess": "Ads successfully removed!",
   "purchaseError": "Error during purchase. Please try again.",
-  "purchaseRestored": "Purchases successfully restored!"
+  "purchaseRestored": "Purchases successfully restored!",
+  "noAvailableLists": "No available lists"
 }

@@ -84,6 +84,17 @@
   "questionVoiceToWordConstructor": "Аудирование -> Изучаемый (конструктор)",
   "questionTranslateToWordInput": "Перевод -> Изучаемый (ввод)",
   "questionTranslateToWordConstructor": "Перевод -> Изучаемый (конструктор)",
+  "questionWordToTranslateDesc": "Вопрос: Изучаемое слово\nОтвет: Перевод на родной язык",
+  "questionTranslateToWordDesc": "Вопрос: Перевод\nОтвет: Изучаемое слово",
+  "questionImageToWordDesc": "Вопрос: Картинка\nОтвет: Изучаемое слово",
+  "questionWordToReadingDesc": "Вопрос: Изучаемое слово\nОтвет: Чтение (транскрипция)",
+  "questionReadingToWordDesc": "Вопрос: Чтение (транскрипция)\nОтвет: Изучаемое слово",
+  "questionVoiceToTranslateDesc": "Вопрос: Озвучка изучаемого слова\nОтвет: Перевод",
+  "questionVoiceToWordDesc": "Вопрос: Озвучка изучаемого слова\nОтвет: Изучаемое слово",
+  "questionVoiceToWordInputDesc": "Вопрос: Озвучка изучаемого слова\nОтвет: Ввод изучаемого слова с клавиатуры",
+  "questionVoiceToWordConstructorDesc": "Вопрос: Озвучка изучаемого слова\nОтвет: Сборка изучаемого слова из символов",
+  "questionTranslateToWordInputDesc": "Вопрос: Перевод\nОтвет: Ввод изучаемого слова с клавиатуры",
+  "questionTranslateToWordConstructorDesc": "Вопрос: Перевод\nОтвет: Сборка изучаемого слова из символов",
   "listenToTheWord": "Слушайте слово",
   "submitAnswer": "Ответить",
   "typeYourAnswer": "Введите слово...",
@@ -197,5 +208,6 @@
   "restorePurchasesButton": "Восстановить покупки",
   "purchaseSuccess": "Реклама успешно отключена!",
   "purchaseError": "Ошибка при покупке. Попробуйте еще раз.",
-  "purchaseRestored": "Покупки успешно восстановлены!"
+  "purchaseRestored": "Покупки успешно восстановлены!",
+  "noAvailableLists": "Нет доступных списков"
 }

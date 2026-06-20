@@ -123,12 +123,31 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   }
 
   void _startQuickTraining() {
-    if (_customLists.isEmpty) return;
+    if (_customLists.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context)!.noAvailableLists)),
+      );
+      return;
+    }
+
+    List<CustomList> listsWithWords = [];
+    for (var list in _customLists) {
+      list.words.loadSync();
+      if (list.words.isNotEmpty) {
+        listsWithWords.add(list);
+      }
+    }
+
+    if (listsWithWords.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context)!.noAvailableLists)),
+      );
+      return;
+    }
+
     final random = Random();
-    final list = _customLists[random.nextInt(_customLists.length)];
-    list.words.loadSync();
+    final list = listsWithWords[random.nextInt(listsWithWords.length)];
     final words = list.words.toList();
-    if (words.isEmpty) return;
 
     final unlearned = words.where((w) => w.progress < 5).toList();
     final isLearning = unlearned.isNotEmpty;

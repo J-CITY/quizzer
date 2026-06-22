@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/custom_list.dart';
@@ -318,10 +319,27 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                                         context,
                                       )!.sheetFormatHintTitle,
                                     ),
-                                    content: Text(
-                                      AppLocalizations.of(
-                                        context,
-                                      )!.sheetFormatHintDesc,
+                                    content: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          AppLocalizations.of(
+                                            context,
+                                          )!.sheetFormatHintDesc,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        InkWell(
+                                          onTap: () => launchUrl(Uri.parse('https://docs.google.com/spreadsheets/d/1MSH2Nz7ehUbukKnRZ2fi0JrNCSoBwp165HA33c3_Kdw/edit?usp=sharing')),
+                                          child: Text(
+                                            AppLocalizations.of(context)!.sheetFormatHintLink,
+                                            style: const TextStyle(
+                                              color: Colors.blue,
+                                              decoration: TextDecoration.underline,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     actions: [
                                       TextButton(

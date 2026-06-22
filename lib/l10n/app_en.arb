@@ -209,5 +209,9 @@
   "purchaseSuccess": "Ads successfully removed!",
   "purchaseError": "Error during purchase. Please try again.",
   "purchaseRestored": "Purchases successfully restored!",
-  "noAvailableLists": "No available lists"
+  "noAvailableLists": "No available lists",
+  "tutorialButtonTooltip": "How to use",
+  "tutorialNext": "Next",
+  "tutorialSkip": "Skip",
+  "tutorialDone": "Let's start!"
 }

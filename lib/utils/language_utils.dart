@@ -10,7 +10,37 @@ class LanguageUtils {
     'de-DE',
     'fr-FR',
     'it-IT',
+    'zh-CN',
+    'ko-KR',
+    'ar-SA',
   ];
+
+  static String getLanguageLabel(String lang) {
+    switch (lang) {
+      case 'ja-JP':
+        return 'ja-JP (Japanese / japan)';
+      case 'en-US':
+        return 'en-US (English / usa)';
+      case 'es-ES':
+        return 'es-ES (Spanish / spain)';
+      case 'ru-RU':
+        return 'ru-RU (Russian / russia)';
+      case 'de-DE':
+        return 'de-DE (German / germany)';
+      case 'fr-FR':
+        return 'fr-FR (French / france)';
+      case 'it-IT':
+        return 'it-IT (Italian / italy)';
+      case 'zh-CN':
+        return 'zh-CN (Chinese / mandarin)';
+      case 'ko-KR':
+        return 'ko-KR (Korean / korea)';
+      case 'ar-SA':
+        return 'ar-SA (Arabic / arabia)';
+      default:
+        return lang;
+    }
+  }
 
   static Future<bool> isLanguageValid(String language) async {
     final tts = FlutterTts();

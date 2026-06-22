@@ -47,13 +47,11 @@ class _LanguageSelectorState extends ConsumerState<LanguageSelector> {
       dropdownMenuEntries: _allLanguages.map((lang) {
         return DropdownMenuEntry<String>(
           value: lang,
-          label: lang,
+          label: LanguageUtils.getLanguageLabel(lang),
         );
       }).toList(),
       onSelected: (val) {
-        if (val != null) {
-          widget.controller.text = val;
-        }
+        // Do nothing, let DropdownMenu update the controller with the label
       },
     );
   }

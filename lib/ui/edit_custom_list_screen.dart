@@ -63,7 +63,7 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
       text: widget.customList?.googleSheetTabName ?? '',
     );
     _languageController = TextEditingController(
-      text: widget.customList?.language ?? 'ja-JP',
+      text: LanguageUtils.getLanguageLabel(widget.customList?.language ?? 'ja-JP'),
     );
     _syncOnStartup = widget.customList?.syncOnStartup ?? false;
     _useCustomQuestionSettings =
@@ -109,7 +109,7 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
           _nameController.text = name;
           if (result.containsKey('language') &&
               result['language']!.isNotEmpty) {
-            _languageController.text = result['language']!;
+            _languageController.text = LanguageUtils.getLanguageLabel(result['language']!);
           }
         } else {
           name = sheetId;
@@ -128,7 +128,8 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
       }
     }
 
-    final lang = _languageController.text.trim();
+    final langLabel = _languageController.text.trim();
+    final lang = langLabel.split(' ').first; // Extract ja-JP from "ja-JP (Japanese / japan)"
     final db = ref.read(databaseServiceProvider);
 
     final isLangValid = await LanguageUtils.validateAndSaveCustomLanguage(

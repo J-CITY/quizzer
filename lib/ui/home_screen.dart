@@ -7,15 +7,18 @@ import 'settings_screen.dart';
 import 'custom_lists_tab.dart';
 import 'statistics_screen.dart';
 import 'search_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/services/database_service.dart';
+import 'tutorial_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
 
   @override
@@ -28,7 +31,46 @@ class _HomeScreenState extends State<HomeScreen> {
     await NotificationService.requestPermissions();
   }
 
-  final List<Widget> _tabs = [const StatisticsScreen(), const CustomListsTab(), const SearchScreen()];
+  bool _isTutorialChecked = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_isTutorialChecked) {
+      _isTutorialChecked = true;
+      _checkTutorial();
+    }
+  }
+
+  Future<void> _checkTutorial() async {
+    final db = ref.read(databaseServiceProvider);
+    final settings = await db.getSettings();
+    if (!settings.hasSeenTutorial && mounted) {
+      _showTutorial();
+    }
+  }
+
+  void _showTutorial() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => TutorialScreen(
+          onDone: () {
+            Navigator.pop(context);
+          },
+        ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+  }
+
+  final List<Widget> _tabs = [
+    const StatisticsScreen(),
+    const CustomListsTab(),
+    const SearchScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -45,10 +87,17 @@ class _HomeScreenState extends State<HomeScreen> {
           _currentIndex == 0
               ? AppLocalizations.of(context)!.statistics
               : _currentIndex == 1
-                  ? AppLocalizations.of(context)!.wordLists
-                  : AppLocalizations.of(context)!.tabSearch,
+              ? AppLocalizations.of(context)!.wordLists
+              : AppLocalizations.of(context)!.tabSearch,
         ),
         centerTitle: true,
+        leading: _currentIndex == 0
+            ? IconButton(
+                icon: const Icon(Icons.help_outline),
+                tooltip: AppLocalizations.of(context)?.tutorialButtonTooltip,
+                onPressed: _showTutorial,
+              )
+            : null,
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -69,7 +118,9 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
             BoxShadow(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.1),
               blurRadius: 15,
               offset: const Offset(0, -5),
             ),
@@ -84,8 +135,12 @@ class _HomeScreenState extends State<HomeScreen> {
               removeBottom: true,
               child: BottomNavigationBar(
                 selectedItemColor: Theme.of(context).colorScheme.primary,
-                unselectedItemColor: Theme.of(context).textTheme.bodySmall?.color,
-                backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.65),
+                unselectedItemColor: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.color,
+                backgroundColor: Theme.of(
+                  context,
+                ).colorScheme.surface.withValues(alpha: 0.65),
                 elevation: 0,
                 currentIndex: _currentIndex,
                 onTap: (idx) {

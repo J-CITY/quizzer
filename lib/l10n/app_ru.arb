@@ -209,5 +209,9 @@
   "purchaseSuccess": "Реклама успешно отключена!",
   "purchaseError": "Ошибка при покупке. Попробуйте еще раз.",
   "purchaseRestored": "Покупки успешно восстановлены!",
-  "noAvailableLists": "Нет доступных списков"
+  "noAvailableLists": "Нет доступных списков",
+  "tutorialButtonTooltip": "Как пользоваться",
+  "tutorialNext": "Далее",
+  "tutorialSkip": "Пропустить",
+  "tutorialDone": "Начать!"
 }

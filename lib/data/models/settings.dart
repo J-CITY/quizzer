@@ -48,6 +48,8 @@ class Settings {
 
   bool isAdFree = false;
 
-  String searchSourceLanguage = 'ru-RU';
+  String searchSourceLanguage = 'en-US';
   String searchTargetLanguage = 'ja-JP';
+
+  bool hasSeenTutorial = false;
 }

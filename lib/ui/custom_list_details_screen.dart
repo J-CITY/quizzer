@@ -504,6 +504,13 @@ class _CustomListDetailsScreenState
                     _deleteList();
                   } else if (val == 'edit') {
                     setState(() => _mode = _ListMode.selectToDelete);
+                  } else if (val == 'settings') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditCustomListScreen(customList: widget.customList),
+                      ),
+                    ).then((_) => setState(() {}));
                   } else if (val == 'add_to_other') {
                     setState(() => _mode = _ListMode.selectToAdd);
                   } else if (val == 'reset') {
@@ -514,6 +521,10 @@ class _CustomListDetailsScreenState
                   PopupMenuItem(
                     value: 'delete',
                     child: Text(AppLocalizations.of(context)!.deleteList),
+                  ),
+                  PopupMenuItem(
+                    value: 'settings',
+                    child: Text(AppLocalizations.of(context)!.editListTitle),
                   ),
                   if (!isGoogleSheetList)
                     PopupMenuItem(

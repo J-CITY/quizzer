@@ -185,6 +185,7 @@ class ProfileService {
       'confusableCharactersSheetId': settings.confusableCharactersSheetId,
       'customConfusableGroups': settings.customConfusableGroups,
       'questionImageToWord': settings.questionImageToWord,
+      'hasSeenTutorial': settings.hasSeenTutorial,
     };
   }
 
@@ -215,7 +216,8 @@ class ProfileService {
       ..useSpoiledWordsForOptions = map['useSpoiledWordsForOptions'] ?? false
       ..confusableCharactersSheetId = map['confusableCharactersSheetId']
       ..customConfusableGroups = (map['customConfusableGroups'] as List?)?.cast<String>() ?? []
-      ..questionImageToWord = map['questionImageToWord'] ?? true;
+      ..questionImageToWord = map['questionImageToWord'] ?? true
+      ..hasSeenTutorial = map['hasSeenTutorial'] ?? false;
   }
 
   static Map<String, dynamic> _customListToJson(CustomList list) {

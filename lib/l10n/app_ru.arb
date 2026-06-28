@@ -214,5 +214,7 @@
   "tutorialButtonTooltip": "Как пользоваться",
   "tutorialNext": "Далее",
   "tutorialSkip": "Пропустить",
-  "tutorialDone": "Начать!"
+  "tutorialDone": "Начать!",
+  "hapticFeedback": "Тактильный отклик",
+  "hapticFeedbackDesc": "Вибрация при стриках и ошибках"
 }

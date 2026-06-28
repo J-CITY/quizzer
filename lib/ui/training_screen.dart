@@ -10,6 +10,7 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:isar/isar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../data/models/word.dart';
+import '../data/models/custom_list.dart';
 import '../domain/training_engine.dart';
 import '../data/services/database_service.dart';
 import 'training_result_screen.dart';
@@ -37,7 +38,8 @@ class TrainingScreen extends ConsumerStatefulWidget {
   ConsumerState<TrainingScreen> createState() => _TrainingScreenState();
 }
 
-class _TrainingScreenState extends ConsumerState<TrainingScreen> {
+class _TrainingScreenState extends ConsumerState<TrainingScreen>
+    with TickerProviderStateMixin {
   final AudioPlayer _audioPlayer = AudioPlayer();
   List<Question> _questions = [];
   int _currentIndex = 0;
@@ -48,13 +50,20 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   final List<int> _selectedCharIndices = [];
   final Set<int> _selectedMultiIndices = {};
 
-  // Maps question index to the user's selected answer string.
   final Map<int, String> _userAnswers = {};
+
+  List<Word> _allWords = [];
+  CustomList? _customList;
+  int _currentTrainingStreak = 0;
+  static const int _streakThreshold = 10;
+
+  late final AnimationController _pulseController;
 
   bool _isLoading = true;
 
   @override
   void dispose() {
+    _pulseController.dispose();
     _audioPlayer.dispose();
     _textController.dispose();
     super.dispose();
@@ -63,6 +72,10 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
     _initSession();
   }
 
@@ -77,6 +90,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     if (widget.customListId != null) {
       final lists = await db.getCustomLists();
       final list = lists.firstWhere((l) => l.id == widget.customListId);
+      _customList = list;
       listLanguage = list.language;
 
       if (!widget.isReviewMode) {
@@ -104,6 +118,8 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
       if (mounted) Navigator.pop(context);
       return;
     }
+
+    _allWords = await db.getAllWords();
 
     _questions = engine.generateSession(
       sourceWords,
@@ -179,10 +195,16 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
       isCorrect =
           (option.trim() == q.word.japanese.trim()) ||
           (q.word.reading != null && option.trim() == q.word.reading!.trim());
-    } else if (q.type == QuestionType.japToReading && q.correctAnswer.contains('/')) {
+    } else if (q.type == QuestionType.japToReading &&
+        q.correctAnswer.contains('/')) {
       final selectedSet = option.split('/').map((e) => e.trim()).toSet();
-      final correctSet = q.correctAnswer.split('/').map((e) => e.trim()).toSet();
-      isCorrect = selectedSet.length == correctSet.length && selectedSet.containsAll(correctSet);
+      final correctSet = q.correctAnswer
+          .split('/')
+          .map((e) => e.trim())
+          .toSet();
+      isCorrect =
+          selectedSet.length == correctSet.length &&
+          selectedSet.containsAll(correctSet);
     }
 
     if (settings.playSoundEffects) {
@@ -198,11 +220,36 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
       if (!_wrongWordIds.contains(wordId)) {
         _correctFirstTryWordIds.add(wordId);
       }
+      _currentTrainingStreak++;
+      if (_currentTrainingStreak >= _streakThreshold) {
+        if (!_pulseController.isAnimating) {
+          _pulseController.repeat(reverse: true);
+        }
+        if (settings.hapticFeedbackEnabled) {
+          HapticFeedback.mediumImpact();
+        }
+      }
     } else {
       _wrongWordIds.add(wordId);
+      if (_currentTrainingStreak >= _streakThreshold) {
+        _pulseController.stop();
+        _pulseController.value = 0;
+        if (settings.hapticFeedbackEnabled) {
+          HapticFeedback.heavyImpact();
+        }
+      }
+      _currentTrainingStreak = 0;
       if (!widget.isReviewMode) {
-        // Append question to the end for repetition only in learn mode
-        _questions.add(q);
+        // Regenerate question with new wrong options and append to the end
+        final engine = ref.read(trainingEngineProvider);
+        final newQ = engine.regenerateQuestionOptions(
+          q,
+          _allWords,
+          settings,
+          AppLocalizations.of(context)!,
+          _customList,
+        );
+        _questions.add(newQ);
       }
     }
 
@@ -441,324 +488,336 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                 if (!isKeyboardOpen) ...[
                   Expanded(
                     flex: 2,
-                    child: Stack(
-                      alignment: Alignment.topCenter,
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned(
-                          top: -5,
-                          left: 48,
-                          right: 48,
-                          child: Container(
-                            height: 30,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(100),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: primaryColor.withValues(alpha: 0.4),
-                                  blurRadius: 30,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: primaryColor.withValues(alpha: 0.1),
-                                blurRadius: 20,
-                                offset: Offset.zero,
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                    child: AnimatedBuilder(
+                      animation: _pulseController,
+                      builder: (context, child) {
+                        final isStreakActive =
+                            _currentTrainingStreak >= _streakThreshold;
+                        final glowColor = isStreakActive
+                            ? Colors.red
+                            : primaryColor;
+                        final pulseValue = _pulseController.value;
+                        final baseAlphaTop = isStreakActive
+                            ? 0.4 + (pulseValue * 0.4)
+                            : 0.4;
+                        final blurTop = isStreakActive
+                            ? 30.0 + (pulseValue * 20.0)
+                            : 30.0;
+
+                        final baseAlphaCard = isStreakActive
+                            ? 0.1 + (pulseValue * 0.2)
+                            : 0.1;
+                        final blurCard = isStreakActive
+                            ? 20.0 + (pulseValue * 15.0)
+                            : 20.0;
+
+                        return Stack(
+                          alignment: Alignment.topCenter,
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned(
+                              top: -5,
+                              left: 48,
+                              right: 48,
                               child: Container(
+                                height: 30,
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(20),
-                                  color:
-                                      Theme.of(context).brightness ==
-                                          Brightness.dark
-                                      ? Theme.of(context).colorScheme.surface
-                                      : Colors.white.withValues(alpha: 0.8),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.08),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(20),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        primaryColor.withValues(alpha: 0.1),
-                                        primaryColor.withValues(alpha: 0.0),
-                                      ],
-                                      stops: const [0.0, 0.4],
+                                  borderRadius: BorderRadius.circular(100),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: glowColor.withValues(
+                                        alpha: baseAlphaTop,
+                                      ),
+                                      blurRadius: blurTop,
                                     ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: glowColor.withValues(
+                                      alpha: baseAlphaCard,
+                                    ),
+                                    blurRadius: blurCard,
+                                    offset: Offset.zero,
                                   ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        if (showImage)
-                                          Expanded(
-                                            flex: 4,
-                                            child: ClipRRect(
-                                              borderRadius:
-                                                  const BorderRadius.vertical(
-                                                    top: Radius.circular(20),
-                                                  ),
-                                              child: CachedNetworkImage(
-                                                imageUrl: q.word.imageUrl!,
-                                                fit: BoxFit.cover,
-                                                placeholder: (context, url) =>
-                                                    const Center(
-                                                      child:
-                                                          CircularProgressIndicator(),
-                                                    ),
-                                                errorWidget:
-                                                    (context, url, error) =>
-                                                        const Center(
-                                                          child: Icon(
-                                                            Icons.broken_image,
-                                                            size: 48,
-                                                            color: Colors.grey,
-                                                          ),
-                                                        ),
+                                ],
+                              ),
+                              child: child,
+                            ),
+                          ],
+                        );
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Theme.of(context).colorScheme.surface
+                                  : Colors.white.withValues(alpha: 0.8),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.08),
+                                width: 1,
+                              ),
+                            ),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    primaryColor.withValues(alpha: 0.1),
+                                    primaryColor.withValues(alpha: 0.0),
+                                  ],
+                                  stops: const [0.0, 0.4],
+                                ),
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    if (showImage)
+                                      Expanded(
+                                        flex: 4,
+                                        child: ClipRRect(
+                                          borderRadius:
+                                              const BorderRadius.vertical(
+                                                top: Radius.circular(20),
                                               ),
-                                            ),
-                                          ),
-                                        Expanded(
-                                          flex: showImage ? 5 : 1,
-                                          child: Stack(
-                                            children: [
-                                              GestureDetector(
-                                                onLongPress: () {
-                                                  String textToCopy =
-                                                      mainText.isNotEmpty
-                                                      ? mainText
-                                                      : q.word.japanese;
-                                                  Clipboard.setData(
-                                                    ClipboardData(
-                                                      text: textToCopy,
-                                                    ),
-                                                  );
-                                                  ScaffoldMessenger.of(
-                                                    context,
-                                                  ).showSnackBar(
-                                                    SnackBar(
-                                                      content: Text(
-                                                        AppLocalizations.of(
-                                                          context,
-                                                        )!.copiedToClipboard,
+                                          child: CachedNetworkImage(
+                                            imageUrl: q.word.imageUrl!,
+                                            fit: BoxFit.cover,
+                                            placeholder: (context, url) =>
+                                                const Center(
+                                                  child:
+                                                      CircularProgressIndicator(),
+                                                ),
+                                            errorWidget:
+                                                (context, url, error) =>
+                                                    const Center(
+                                                      child: Icon(
+                                                        Icons.broken_image,
+                                                        size: 48,
+                                                        color: Colors.grey,
                                                       ),
                                                     ),
-                                                  );
-                                                },
-                                                child: Center(
-                                                  child: SingleChildScrollView(
-                                                    child: Column(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .center,
-                                                      children: [
-                                                        if ((q.type ==
-                                                                    QuestionType
-                                                                        .voiceToTrans ||
-                                                                q.type ==
-                                                                    QuestionType
-                                                                        .voiceToJap ||
-                                                                q.type ==
-                                                                    QuestionType
-                                                                        .voiceToJapInput ||
-                                                                q.type ==
-                                                                    QuestionType
-                                                                        .voiceToJapConstructor ||
-                                                                q.type ==
-                                                                    QuestionType
-                                                                        .imageToJap) &&
-                                                            !hasAnswered)
-                                                          Column(
-                                                            children: [
-                                                              IconButton(
-                                                                icon: Icon(
-                                                                  Icons
-                                                                      .volume_up,
-                                                                  size:
-                                                                      showImage
-                                                                      ? 56
-                                                                      : 80,
-                                                                  color:
-                                                                      primaryColor,
-                                                                ),
-                                                                onPressed:
-                                                                    _playVoice,
-                                                              ),
-                                                              SizedBox(
-                                                                height:
-                                                                    showImage
-                                                                    ? 8
-                                                                    : 16,
-                                                              ),
-                                                              Text(
-                                                                AppLocalizations.of(
-                                                                  context,
-                                                                )!.listenToTheWord,
-                                                                style: TextStyle(
-                                                                  fontSize:
-                                                                      showImage
-                                                                      ? 18
-                                                                      : 24,
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          )
-                                                        else ...[
-                                                          AutoSizeText(
-                                                            mainText,
+                                          ),
+                                        ),
+                                      ),
+                                    Expanded(
+                                      flex: showImage ? 5 : 1,
+                                      child: Stack(
+                                        children: [
+                                          GestureDetector(
+                                            onLongPress: () {
+                                              String textToCopy =
+                                                  mainText.isNotEmpty
+                                                  ? mainText
+                                                  : q.word.japanese;
+                                              Clipboard.setData(
+                                                ClipboardData(text: textToCopy),
+                                              );
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    AppLocalizations.of(
+                                                      context,
+                                                    )!.copiedToClipboard,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            child: Center(
+                                              child: SingleChildScrollView(
+                                                child: Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    if ((q.type ==
+                                                                QuestionType
+                                                                    .voiceToTrans ||
+                                                            q.type ==
+                                                                QuestionType
+                                                                    .voiceToJap ||
+                                                            q.type ==
+                                                                QuestionType
+                                                                    .voiceToJapInput ||
+                                                            q.type ==
+                                                                QuestionType
+                                                                    .voiceToJapConstructor ||
+                                                            q.type ==
+                                                                QuestionType
+                                                                    .imageToJap) &&
+                                                        !hasAnswered)
+                                                      Column(
+                                                        children: [
+                                                          IconButton(
+                                                            icon: Icon(
+                                                              Icons.volume_up,
+                                                              size: showImage
+                                                                  ? 56
+                                                                  : 80,
+                                                              color:
+                                                                  primaryColor,
+                                                            ),
+                                                            onPressed:
+                                                                _playVoice,
+                                                          ),
+                                                          SizedBox(
+                                                            height: showImage
+                                                                ? 8
+                                                                : 16,
+                                                          ),
+                                                          Text(
+                                                            AppLocalizations.of(
+                                                              context,
+                                                            )!.listenToTheWord,
                                                             style: TextStyle(
                                                               fontSize:
                                                                   showImage
-                                                                  ? 32
-                                                                  : 48,
+                                                                  ? 18
+                                                                  : 24,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      )
+                                                    else ...[
+                                                      AutoSizeText(
+                                                        mainText,
+                                                        style: TextStyle(
+                                                          fontSize: showImage
+                                                              ? 32
+                                                              : 48,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                        maxLines: 3,
+                                                        minFontSize: showImage
+                                                            ? 16
+                                                            : 24,
+                                                      ),
+                                                      if (subText != null &&
+                                                          subText.isNotEmpty)
+                                                        Padding(
+                                                          padding:
+                                                              EdgeInsets.only(
+                                                                top: showImage
+                                                                    ? 4.0
+                                                                    : 8.0,
+                                                              ),
+                                                          child: Text(
+                                                            subText,
+                                                            style: TextStyle(
+                                                              fontSize:
+                                                                  showImage
+                                                                  ? 18
+                                                                  : 24,
+                                                              color: Theme.of(context)
+                                                                  .extension<
+                                                                    AppColorsExtension
+                                                                  >()!
+                                                                  .textSecondary,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      if (showTranslation)
+                                                        Padding(
+                                                          padding:
+                                                              EdgeInsets.only(
+                                                                top: showImage
+                                                                    ? 8.0
+                                                                    : 16.0,
+                                                              ),
+                                                          child: Text(
+                                                            q.word.translation,
+                                                            style: TextStyle(
+                                                              fontSize:
+                                                                  showImage
+                                                                  ? 16
+                                                                  : 20,
                                                               fontWeight:
                                                                   FontWeight
-                                                                      .bold,
+                                                                      .w500,
                                                             ),
                                                             textAlign: TextAlign
                                                                 .center,
-                                                            maxLines: 3,
-                                                            minFontSize:
-                                                                showImage
-                                                                ? 16
-                                                                : 24,
                                                           ),
-                                                          if (subText != null &&
-                                                              subText
-                                                                  .isNotEmpty)
-                                                            Padding(
-                                                              padding:
-                                                                  EdgeInsets.only(
-                                                                    top:
-                                                                        showImage
-                                                                        ? 4.0
-                                                                        : 8.0,
-                                                                  ),
-                                                              child: Text(
-                                                                subText,
-                                                                style: TextStyle(
-                                                                  fontSize:
-                                                                      showImage
-                                                                      ? 18
-                                                                      : 24,
-                                                                  color: Theme.of(context)
-                                                                      .extension<
-                                                                        AppColorsExtension
-                                                                      >()!
-                                                                      .textSecondary,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          if (showTranslation)
-                                                            Padding(
-                                                              padding:
-                                                                  EdgeInsets.only(
-                                                                    top:
-                                                                        showImage
-                                                                        ? 8.0
-                                                                        : 16.0,
-                                                                  ),
-                                                              child: Text(
-                                                                q
-                                                                    .word
-                                                                    .translation,
-                                                                style: TextStyle(
-                                                                  fontSize:
-                                                                      showImage
-                                                                      ? 16
-                                                                      : 20,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w500,
-                                                                ),
-                                                                textAlign:
-                                                                    TextAlign
-                                                                        .center,
-                                                              ),
-                                                            ),
-                                                        ],
-                                                      ],
-                                                    ),
-                                                  ),
+                                                        ),
+                                                    ],
+                                                  ],
                                                 ),
                                               ),
-                                              // Hide small mic if:
-                                              // 1. Not answered and type is Trans->Jap (to avoid hint)
-                                              // 2. Not answered and type is Auditory (because big mic is shown)
-                                              if (!(!hasAnswered &&
-                                                  (q.type ==
-                                                          QuestionType
-                                                              .transToJap ||
-                                                      q.type ==
-                                                          QuestionType
-                                                              .transToJapInput ||
-                                                      q.type ==
-                                                          QuestionType
-                                                              .transToJapConstructor ||
-                                                      q.type ==
-                                                          QuestionType
-                                                              .voiceToTrans ||
-                                                      q.type ==
-                                                          QuestionType
-                                                              .voiceToJap ||
-                                                      q.type ==
-                                                          QuestionType
-                                                              .voiceToJapInput ||
-                                                      q.type ==
-                                                          QuestionType
-                                                              .voiceToJapConstructor ||
-                                                      q.type ==
-                                                          QuestionType
-                                                              .imageToJap ||
-                                                      q.type ==
-                                                          QuestionType
-                                                              .japToReading)))
-                                                Positioned(
-                                                  top: 8,
-                                                  right: 8,
-                                                  child: IconButton(
-                                                    icon: Icon(
-                                                      Icons.volume_up,
-                                                      size: 32,
-                                                      color: primaryColor,
-                                                    ),
-                                                    onPressed: _playVoice,
-                                                  ),
-                                                ),
-                                            ],
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                          // Hide small mic if:
+                                          // 1. Not answered and type is Trans->Jap (to avoid hint)
+                                          // 2. Not answered and type is Auditory (because big mic is shown)
+                                          if (!(!hasAnswered &&
+                                              (q.type ==
+                                                      QuestionType.transToJap ||
+                                                  q.type ==
+                                                      QuestionType
+                                                          .transToJapInput ||
+                                                  q.type ==
+                                                      QuestionType
+                                                          .transToJapConstructor ||
+                                                  q.type ==
+                                                      QuestionType
+                                                          .voiceToTrans ||
+                                                  q.type ==
+                                                      QuestionType.voiceToJap ||
+                                                  q.type ==
+                                                      QuestionType
+                                                          .voiceToJapInput ||
+                                                  q.type ==
+                                                      QuestionType
+                                                          .voiceToJapConstructor ||
+                                                  q.type ==
+                                                      QuestionType.imageToJap ||
+                                                  q.type ==
+                                                      QuestionType
+                                                          .japToReading)))
+                                            Positioned(
+                                              top: 8,
+                                              right: 8,
+                                              child: IconButton(
+                                                icon: Icon(
+                                                  Icons.volume_up,
+                                                  size: 32,
+                                                  color: primaryColor,
+                                                ),
+                                                onPressed: _playVoice,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
+                      ), // closes ClipRRect
+                    ), // closes AnimatedBuilder
+                  ), // closes Expanded
                   const SizedBox(height: 24),
                 ],
                 if (isKeyboardOpen)
@@ -888,7 +947,8 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     } else if (q.type == QuestionType.transToJapConstructor ||
         q.type == QuestionType.voiceToJapConstructor) {
       return _buildConstructorArea(q, hasAnswered, selectedOption);
-    } else if (q.type == QuestionType.japToReading && q.correctAnswer.contains('/')) {
+    } else if (q.type == QuestionType.japToReading &&
+        q.correctAnswer.contains('/')) {
       return _buildMultiSelectionArea(q, hasAnswered, selectedOption);
     } else {
       return _buildMultipleChoiceArea(q, hasAnswered, selectedOption);
@@ -907,7 +967,8 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
           q.type == QuestionType.voiceToJapInput) {
         isCorrect =
             (selectedOption?.trim() == q.word.japanese.trim()) ||
-            (q.word.reading != null && selectedOption?.trim() == q.word.reading!.trim());
+            (q.word.reading != null &&
+                selectedOption?.trim() == q.word.reading!.trim());
       }
       if (isCorrect) {
         borderColor = Theme.of(
@@ -973,16 +1034,21 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                     context,
                   )!.yourAnswer(selectedOption ?? ''),
                   style: TextStyle(
-                    color: (() {
-                      bool isCorrect = selectedOption?.trim() == q.correctAnswer.trim();
-                      if (q.type == QuestionType.transToJapInput ||
-                          q.type == QuestionType.voiceToJapInput) {
-                        isCorrect =
-                            (selectedOption?.trim() == q.word.japanese.trim()) ||
-                            (q.word.reading != null && selectedOption?.trim() == q.word.reading!.trim());
-                      }
-                      return isCorrect;
-                    })()
+                    color:
+                        (() {
+                          bool isCorrect =
+                              selectedOption?.trim() == q.correctAnswer.trim();
+                          if (q.type == QuestionType.transToJapInput ||
+                              q.type == QuestionType.voiceToJapInput) {
+                            isCorrect =
+                                (selectedOption?.trim() ==
+                                    q.word.japanese.trim()) ||
+                                (q.word.reading != null &&
+                                    selectedOption?.trim() ==
+                                        q.word.reading!.trim());
+                          }
+                          return isCorrect;
+                        })()
                         ? Theme.of(
                             context,
                           ).extension<AppColorsExtension>()!.success
@@ -991,15 +1057,17 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                   ),
                 ),
                 if (!(() {
-                      bool isCorrect = selectedOption?.trim() == q.correctAnswer.trim();
-                      if (q.type == QuestionType.transToJapInput ||
-                          q.type == QuestionType.voiceToJapInput) {
-                        isCorrect =
-                            (selectedOption?.trim() == q.word.japanese.trim()) ||
-                            (q.word.reading != null && selectedOption?.trim() == q.word.reading!.trim());
-                      }
-                      return isCorrect;
-                    })())
+                  bool isCorrect =
+                      selectedOption?.trim() == q.correctAnswer.trim();
+                  if (q.type == QuestionType.transToJapInput ||
+                      q.type == QuestionType.voiceToJapInput) {
+                    isCorrect =
+                        (selectedOption?.trim() == q.word.japanese.trim()) ||
+                        (q.word.reading != null &&
+                            selectedOption?.trim() == q.word.reading!.trim());
+                  }
+                  return isCorrect;
+                })())
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
@@ -1197,17 +1265,24 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
               final option = q.options[index];
               Color? buttonColor;
               Color? textColor;
-              
+
               if (hasAnswered) {
-                 final correctSet = q.correctAnswer.split('/').map((e) => e.trim()).toSet();
-                 final selectedSet = selectedOption?.split('/').map((e) => e.trim()).toSet() ?? {};
-                 if (correctSet.contains(option)) {
-                   buttonColor = Theme.of(context).extension<AppColorsExtension>()!.success;
-                   textColor = buttonColor;
-                 } else if (selectedSet.contains(option)) {
-                   buttonColor = Theme.of(context).colorScheme.error;
-                   textColor = buttonColor;
-                 }
+                final correctSet = q.correctAnswer
+                    .split('/')
+                    .map((e) => e.trim())
+                    .toSet();
+                final selectedSet =
+                    selectedOption?.split('/').map((e) => e.trim()).toSet() ??
+                    {};
+                if (correctSet.contains(option)) {
+                  buttonColor = Theme.of(
+                    context,
+                  ).extension<AppColorsExtension>()!.success;
+                  textColor = buttonColor;
+                } else if (selectedSet.contains(option)) {
+                  buttonColor = Theme.of(context).colorScheme.error;
+                  textColor = buttonColor;
+                }
               }
 
               return ElevatedButton(
@@ -1223,9 +1298,22 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                         });
                       },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: buttonColor ?? (isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2) : null),
-                  foregroundColor: textColor ?? (isSelected ? Theme.of(context).colorScheme.primary : null),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  backgroundColor:
+                      buttonColor ??
+                      (isSelected
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.2)
+                          : null),
+                  foregroundColor:
+                      textColor ??
+                      (isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : null),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
                 child: Text(option, style: const TextStyle(fontSize: 18)),
               );
@@ -1236,7 +1324,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
             ElevatedButton(
               onPressed: _selectedMultiIndices.isNotEmpty
                   ? () {
-                      final selectedVals = _selectedMultiIndices.map((i) => q.options[i]).toList();
+                      final selectedVals = _selectedMultiIndices
+                          .map((i) => q.options[i])
+                          .toList();
                       selectedVals.sort();
                       _onOptionSelected(selectedVals.join(' / '));
                     }
@@ -1255,14 +1345,28 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
               child: Column(
                 children: [
                   Text(
-                    AppLocalizations.of(context)!.yourAnswer(selectedOption ?? ''),
+                    AppLocalizations.of(
+                      context,
+                    )!.yourAnswer(selectedOption ?? ''),
                     style: TextStyle(
                       color: (() {
-                        final selectedSet = selectedOption?.split('/').map((e) => e.trim()).toSet() ?? {};
-                        final correctSet = q.correctAnswer.split('/').map((e) => e.trim()).toSet();
-                        final isCorrect = selectedSet.length == correctSet.length && selectedSet.containsAll(correctSet);
+                        final selectedSet =
+                            selectedOption
+                                ?.split('/')
+                                .map((e) => e.trim())
+                                .toSet() ??
+                            {};
+                        final correctSet = q.correctAnswer
+                            .split('/')
+                            .map((e) => e.trim())
+                            .toSet();
+                        final isCorrect =
+                            selectedSet.length == correctSet.length &&
+                            selectedSet.containsAll(correctSet);
                         return isCorrect
-                            ? Theme.of(context).extension<AppColorsExtension>()!.success
+                            ? Theme.of(
+                                context,
+                              ).extension<AppColorsExtension>()!.success
                             : Theme.of(context).colorScheme.error;
                       })(),
                       fontSize: 18,
@@ -1270,16 +1374,29 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                     textAlign: TextAlign.center,
                   ),
                   if (!(() {
-                        final selectedSet = selectedOption?.split('/').map((e) => e.trim()).toSet() ?? {};
-                        final correctSet = q.correctAnswer.split('/').map((e) => e.trim()).toSet();
-                        return selectedSet.length == correctSet.length && selectedSet.containsAll(correctSet);
-                      })())
+                    final selectedSet =
+                        selectedOption
+                            ?.split('/')
+                            .map((e) => e.trim())
+                            .toSet() ??
+                        {};
+                    final correctSet = q.correctAnswer
+                        .split('/')
+                        .map((e) => e.trim())
+                        .toSet();
+                    return selectedSet.length == correctSet.length &&
+                        selectedSet.containsAll(correctSet);
+                  })())
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Text(
-                        AppLocalizations.of(context)!.correctAnswer(q.correctAnswer),
+                        AppLocalizations.of(
+                          context,
+                        )!.correctAnswer(q.correctAnswer),
                         style: TextStyle(
-                          color: Theme.of(context).extension<AppColorsExtension>()!.success,
+                          color: Theme.of(
+                            context,
+                          ).extension<AppColorsExtension>()!.success,
                           fontSize: 18,
                         ),
                         textAlign: TextAlign.center,

@@ -214,5 +214,7 @@
   "tutorialButtonTooltip": "How to use",
   "tutorialNext": "Next",
   "tutorialSkip": "Skip",
-  "tutorialDone": "Let's start!"
+  "tutorialDone": "Let's start!",
+  "hapticFeedback": "Haptic feedback",
+  "hapticFeedbackDesc": "Vibrate on streaks and mistakes"
 }

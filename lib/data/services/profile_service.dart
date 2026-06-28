@@ -169,6 +169,7 @@ class ProfileService {
       'notificationTimeEnd': settings.notificationTimeEnd,
       'autoPlayVoice': settings.autoPlayVoice,
       'playSoundEffects': settings.playSoundEffects,
+      'hapticFeedbackEnabled': settings.hapticFeedbackEnabled,
       'questionWordToTranslate': settings.questionWordToTranslate,
       'questionTranslateToWord': settings.questionTranslateToWord,
       'questionWordToReading': settings.questionWordToReading,
@@ -201,6 +202,7 @@ class ProfileService {
       ..notificationTimeEnd = map['notificationTimeEnd'] ?? '22:00'
       ..autoPlayVoice = map['autoPlayVoice'] ?? false
       ..playSoundEffects = map['playSoundEffects'] ?? true
+      ..hapticFeedbackEnabled = map['hapticFeedbackEnabled'] ?? true
       ..questionWordToTranslate = map['questionWordToTranslate'] ?? true
       ..questionTranslateToWord = map['questionTranslateToWord'] ?? true
       ..questionWordToReading = map['questionWordToReading'] ?? true

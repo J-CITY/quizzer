@@ -86,13 +86,31 @@ class TrainingEngine {
         .toList();
   }
 
-  Question _generateQuestion(
-    Word word,
+  Question regenerateQuestionOptions(
+    Question oldQuestion,
     List<Word> allWords,
     Settings settings,
     AppLocalizations l10n,
     CustomList? customList,
   ) {
+    return _generateQuestion(
+      oldQuestion.word,
+      allWords,
+      settings,
+      l10n,
+      customList,
+      oldQuestion.type,
+    );
+  }
+
+  Question _generateQuestion(
+    Word word,
+    List<Word> allWords,
+    Settings settings,
+    AppLocalizations l10n,
+    CustomList? customList, [
+    int? forceType,
+  ]) {
     List<int> availableTypes = [];
 
     bool useVoiceToTranslate = settings.questionVoiceToTranslate;
@@ -160,7 +178,7 @@ class TrainingEngine {
       availableTypes.add(QuestionType.japToTrans); // Fallback
     }
 
-    final type = availableTypes[_random.nextInt(availableTypes.length)];
+    final type = forceType ?? availableTypes[_random.nextInt(availableTypes.length)];
 
     String prompt = '';
     String? subtitle;

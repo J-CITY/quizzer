@@ -131,7 +131,9 @@ class DatabaseService {
     await cleanUpOrphanedWords();
   }
 
-  /// Lowers progress by 1 if a word was learned but hasn't been trained for >= 7 days
+  static const List<int> _spacedRepetitionIntervals = [7, 30, 90, 180];
+
+  /// Lowers progress by 1 if a word was learned but hasn't been trained for >= required days
   Future<void> _applySpacedRepetition() async {
     final now = DateTime.now();
     final learnedWords = await isar.words.filter().progressEqualTo(5).findAll();
@@ -141,7 +143,14 @@ class DatabaseService {
       if (word.isManuallyLearned) continue;
       if (word.lastTrained != null) {
         final diff = now.difference(word.lastTrained!).inDays;
-        if (diff >= 7) {
+        
+        int intervalIndex = word.timesLearned > 0 ? word.timesLearned - 1 : 0;
+        if (intervalIndex >= _spacedRepetitionIntervals.length) {
+          intervalIndex = _spacedRepetitionIntervals.length - 1;
+        }
+        final requiredDays = _spacedRepetitionIntervals[intervalIndex];
+        
+        if (diff >= requiredDays) {
           word.progress = 4;
           wordsToUpdate.add(word);
         }
@@ -160,6 +169,9 @@ class DatabaseService {
   }
 
   Future<void> updateWordProgress(Word word, int newProgress) async {
+    if (newProgress == 5 && word.progress < 5) {
+      word.timesLearned += 1;
+    }
     word.progress = newProgress;
     word.lastTrained = DateTime.now();
     await isar.writeTxn(() async {

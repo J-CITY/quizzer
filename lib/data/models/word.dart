@@ -27,5 +27,7 @@ class Word {
 
   int orderIndex = 0;
 
+  int timesLearned = 0; // Tracks how many times progress reached 5
+
   bool get isLearned => progress >= 5;
 }

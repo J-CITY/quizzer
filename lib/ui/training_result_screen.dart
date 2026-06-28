@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:confetti/confetti.dart';
 import '../data/models/word.dart';
 import '../utils/constants.dart';
+import '../data/services/database_service.dart';
 import 'training_screen.dart'; // for ttsProvider
 import 'widgets/acrylic_card.dart';
 import 'widgets/glow_button.dart';
@@ -41,8 +43,15 @@ class _TrainingResultScreenState extends ConsumerState<TrainingResultScreen> {
     }
 
     // Show interstitial ad if applicable
-    Future.microtask(() {
+    Future.microtask(() async {
       ref.read(adsServiceProvider).showInterstitialAd();
+      
+      if (widget.mistakes.isEmpty) {
+        final settings = await ref.read(databaseServiceProvider).getSettings();
+        if (settings.hapticFeedbackEnabled) {
+          HapticFeedback.vibrate();
+        }
+      }
     });
   }
 

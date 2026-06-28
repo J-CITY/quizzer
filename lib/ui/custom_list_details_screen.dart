@@ -697,7 +697,7 @@ class _CustomListDetailsScreenState
                                     ),
                                     const SizedBox(width: 12),
                                     Checkbox(
-                                      value: isLearned,
+                                      value: word.isManuallyLearned,
                                       activeColor: Theme.of(context)
                                           .extension<AppColorsExtension>()!
                                           .success,

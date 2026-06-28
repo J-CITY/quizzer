@@ -20,6 +20,7 @@ class Settings {
 
   bool autoPlayVoice = false;
   bool playSoundEffects = true;
+  bool hapticFeedbackEnabled = true;
 
   bool questionWordToTranslate = true;
   bool questionTranslateToWord = true;

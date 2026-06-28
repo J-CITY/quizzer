@@ -314,6 +314,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   SettingsTile(
+                    title: AppLocalizations.of(context)!.hapticFeedback,
+                    subtitle: AppLocalizations.of(context)!.hapticFeedbackDesc,
+                    trailing: Switch(
+                      value: settings.hapticFeedbackEnabled,
+                      onChanged: (val) {
+                        _updateSettings(settings, () {
+                          settings.hapticFeedbackEnabled = val;
+                        });
+                      },
+                    ),
+                  ),
+                  SettingsTile(
                     title: AppLocalizations.of(context)!.settingsAutoAdvance,
                     subtitle: AppLocalizations.of(context)!.settingsAutoAdvanceDesc,
                     showDivider: false,

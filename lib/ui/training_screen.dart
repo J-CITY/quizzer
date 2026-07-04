@@ -221,12 +221,18 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
         _correctFirstTryWordIds.add(wordId);
       }
       _currentTrainingStreak++;
-      if (_currentTrainingStreak >= _streakThreshold) {
-        if (!_pulseController.isAnimating) {
-          _pulseController.repeat(reverse: true);
-        }
+      if (_currentTrainingStreak == _streakThreshold) {
+        _pulseController.forward(from: 0.0).then((_) => _pulseController.reverse());
         if (settings.hapticFeedbackEnabled) {
           HapticFeedback.mediumImpact();
+          Future.delayed(const Duration(milliseconds: 150), () {
+            HapticFeedback.heavyImpact();
+          });
+        }
+      } else if (_currentTrainingStreak > _streakThreshold) {
+        _pulseController.forward(from: 0.0).then((_) => _pulseController.reverse());
+        if (settings.hapticFeedbackEnabled) {
+          HapticFeedback.lightImpact();
         }
       }
     } else {
@@ -236,6 +242,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
         _pulseController.value = 0;
         if (settings.hapticFeedbackEnabled) {
           HapticFeedback.heavyImpact();
+          Future.delayed(const Duration(milliseconds: 150), () {
+            HapticFeedback.heavyImpact();
+          });
         }
       }
       _currentTrainingStreak = 0;
@@ -359,6 +368,16 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
     }
 
     await db.saveTrainingSession(widget.customListId);
+
+    final settings = await db.getSettings();
+    if (_wrongWordIds.isEmpty && _questions.isNotEmpty) {
+      if (settings.hapticFeedbackEnabled) {
+        HapticFeedback.mediumImpact();
+        Future.delayed(const Duration(milliseconds: 150), () {
+          HapticFeedback.heavyImpact();
+        });
+      }
+    }
 
     if (mounted) {
       Navigator.pushReplacement(

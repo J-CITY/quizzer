@@ -49,7 +49,10 @@ class _TrainingResultScreenState extends ConsumerState<TrainingResultScreen> {
       if (widget.mistakes.isEmpty) {
         final settings = await ref.read(databaseServiceProvider).getSettings();
         if (settings.hapticFeedbackEnabled) {
-          HapticFeedback.vibrate();
+          HapticFeedback.mediumImpact();
+          Future.delayed(const Duration(milliseconds: 150), () {
+            HapticFeedback.heavyImpact();
+          });
         }
       }
     });

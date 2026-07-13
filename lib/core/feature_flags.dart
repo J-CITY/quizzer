@@ -1,4 +1,5 @@
 class FeatureFlags {
-  static const bool enableAds = true;
-  static const bool enableIap = true;
+  static const bool enableAds = false;
+  static const bool enableIap = false;
+  static const bool enableCheatMenu = true;
 }

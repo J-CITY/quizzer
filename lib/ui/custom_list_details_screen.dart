@@ -609,7 +609,8 @@ class _CustomListDetailsScreenState
                 final filteredWords = words.where((w) {
                   final q = _searchQuery.toLowerCase();
                   return w.japanese.toLowerCase().contains(q) ||
-                      w.translation.toLowerCase().contains(q);
+                      w.translation.toLowerCase().contains(q) ||
+                      (w.reading != null && w.reading!.toLowerCase().contains(q));
                 }).toList();
 
                 if (filteredWords.isEmpty) {

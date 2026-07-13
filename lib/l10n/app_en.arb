@@ -216,5 +216,8 @@
   "tutorialSkip": "Skip",
   "tutorialDone": "Let's start!",
   "hapticFeedback": "Haptic feedback",
-  "hapticFeedbackDesc": "Vibrate on streaks and mistakes"
+  "hapticFeedbackDesc": "Vibrate on streaks and mistakes",
+  "cheatMenuTitle": "Cheats",
+  "setStreakTitle": "Change Streak",
+  "setStreakDesc": "Set an arbitrary number of days for your streak"
 }

@@ -313,4 +313,32 @@ class DatabaseService {
   Future<List<TrainingSession>> getAllTrainingSessions() async {
     return await isar.trainingSessions.where().findAll();
   }
+
+  Future<void> setStreakCheat(int desiredStreak) async {
+    final existingSessions = await isar.trainingSessions.where().findAll();
+    final existingDates = existingSessions.map((s) => DateTime(s.date.year, s.date.month, s.date.day)).toSet();
+
+    await isar.writeTxn(() async {
+      if (desiredStreak > 0) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        
+        final sessionsToAdd = <TrainingSession>[];
+        for (int i = 0; i < desiredStreak; i++) {
+          final checkDate = today.subtract(Duration(days: i));
+          if (!existingDates.contains(checkDate)) {
+            sessionsToAdd.add(
+              TrainingSession()
+                ..date = checkDate
+                ..customListId = null,
+            );
+          }
+        }
+        
+        if (sessionsToAdd.isNotEmpty) {
+          await isar.trainingSessions.putAll(sessionsToAdd);
+        }
+      }
+    });
+  }
 }

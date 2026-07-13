@@ -654,6 +654,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
               ],
+              if (FeatureFlags.enableCheatMenu) ...[
+                const SizedBox(height: 16),
+                SettingsGroup(
+                  title: AppLocalizations.of(context)!.cheatMenuTitle,
+                  children: [
+                    SettingsTile(
+                      title: AppLocalizations.of(context)!.setStreakTitle,
+                      subtitle: AppLocalizations.of(context)!.setStreakDesc,
+                      showDivider: false,
+                      trailing: const Icon(Icons.edit, color: Colors.blue),
+                      onTap: () {
+                        _showNumberDialog(
+                          AppLocalizations.of(context)!.setStreakTitle,
+                          1, // Default value to show
+                          (val) async {
+                            await ref.read(databaseServiceProvider).setStreakCheat(val);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Стрик успешно обновлен! / Streak updated!')),
+                              );
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 32),
             ],
           );

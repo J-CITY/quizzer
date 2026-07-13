@@ -43,6 +43,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
   final AudioPlayer _audioPlayer = AudioPlayer();
   List<Question> _questions = [];
   int _currentIndex = 0;
+  int _initialQuestionsCount = 0;
   final Set<int> _wrongWordIds = {};
   final Set<int> _correctFirstTryWordIds = {};
 
@@ -132,6 +133,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
             )
           : null,
     );
+    _initialQuestionsCount = _questions.length;
 
     if (mounted) {
       setState(() => _isLoading = false);
@@ -320,25 +322,71 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
     int learnedCount = 0;
     int inProgressCount = 0;
 
-    if (!widget.isReviewMode) {
-      // Wrong answers get -1 progress (min 0)
-      for (var id in _wrongWordIds) {
-        final w = wordsMap[id];
-        if (w != null) {
-          mistakesList.add(w);
-          final newProgress = (w.progress > 0) ? w.progress - 1 : 0;
-          await db.updateWordProgress(w, newProgress);
+    // Считаем общее число вопросов и число правильных ответов с первой попытки для каждого слова
+    final Map<int, int> wordTotalQuestions = {};
+    final Map<int, int> wordCorrectAnswers = {};
+
+    for (int i = 0; i < _initialQuestionsCount; i++) {
+      if (i >= _questions.length) break;
+      final q = _questions[i];
+      final wordId = q.word.id;
+
+      wordTotalQuestions[wordId] = (wordTotalQuestions[wordId] ?? 0) + 1;
+
+      final userAnswer = _userAnswers[i];
+      if (userAnswer != null) {
+        bool isCorrect = userAnswer.trim() == q.correctAnswer.trim();
+        if (q.type == QuestionType.transToJapInput ||
+            q.type == QuestionType.voiceToJapInput) {
+          isCorrect =
+              (userAnswer.trim() == q.word.japanese.trim()) ||
+              (q.word.reading != null && userAnswer.trim() == q.word.reading!.trim());
+        } else if (q.type == QuestionType.japToReading &&
+            q.correctAnswer.contains('/')) {
+          final selectedSet = userAnswer.split('/').map((e) => e.trim()).toSet();
+          final correctSet = q.correctAnswer
+              .split('/')
+              .map((e) => e.trim())
+              .toSet();
+          isCorrect =
+              selectedSet.length == correctSet.length &&
+              selectedSet.containsAll(correctSet);
+        }
+
+        if (isCorrect) {
+          wordCorrectAnswers[wordId] = (wordCorrectAnswers[wordId] ?? 0) + 1;
         }
       }
+    }
 
-      // Correct answers get +1
-      for (var id in _correctFirstTryWordIds) {
-        if (!_wrongWordIds.contains(id)) {
-          final w = wordsMap[id];
-          if (w != null) {
-            if (w.progress < 5) {
-              await db.updateWordProgress(w, w.progress + 1);
-            }
+    if (!widget.isReviewMode) {
+      for (var wordId in wordTotalQuestions.keys) {
+        final w = wordsMap[wordId];
+        if (w == null) continue;
+
+        final total = wordTotalQuestions[wordId] ?? 0;
+        final correct = wordCorrectAnswers[wordId] ?? 0;
+
+        if (correct == total) {
+          // 100% правильных ответов с первой попытки -> прогресс +1
+          if (w.progress < 5) {
+            await db.updateWordProgress(w, w.progress + 1);
+          }
+          if (w.progress >= 5) {
+            learnedCount++;
+          } else {
+            inProgressCount++;
+          }
+        } else {
+          // Были ошибки -> слово идет в список ошибок для отображения в результатах
+          mistakesList.add(w);
+
+          if (correct < (total / 2.0)) {
+            // Менее 50% правильных ответов -> прогресс -1
+            final newProgress = (w.progress > 0) ? w.progress - 1 : 0;
+            await db.updateWordProgress(w, newProgress);
+          } else {
+            // От 50% до 99% правильных ответов -> прогресс не меняется
             if (w.progress >= 5) {
               learnedCount++;
             } else {
@@ -348,20 +396,26 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
         }
       }
     } else {
-      // Just collect mistakes for the result screen
-      for (var id in _wrongWordIds) {
-        final w = wordsMap[id];
-        if (w != null) mistakesList.add(w);
-      }
-      for (var id in _correctFirstTryWordIds) {
-        if (!_wrongWordIds.contains(id)) {
-          final w = wordsMap[id];
-          if (w != null) {
-            if (w.progress >= 5) {
-              learnedCount++;
-            } else {
-              inProgressCount++;
-            }
+      // Режим повторения: прогресс в БД не меняется, только считаем статистику и ошибки
+      for (var wordId in wordTotalQuestions.keys) {
+        final w = wordsMap[wordId];
+        if (w == null) continue;
+
+        final total = wordTotalQuestions[wordId] ?? 0;
+        final correct = wordCorrectAnswers[wordId] ?? 0;
+
+        if (correct == total) {
+          if (w.progress >= 5) {
+            learnedCount++;
+          } else {
+            inProgressCount++;
+          }
+        } else {
+          mistakesList.add(w);
+          if (w.progress >= 5) {
+            learnedCount++;
+          } else {
+            inProgressCount++;
           }
         }
       }

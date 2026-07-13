@@ -216,5 +216,8 @@
   "tutorialSkip": "Пропустить",
   "tutorialDone": "Начать!",
   "hapticFeedback": "Тактильный отклик",
-  "hapticFeedbackDesc": "Вибрация при стриках и ошибках"
+  "hapticFeedbackDesc": "Вибрация при стриках и ошибках",
+  "cheatMenuTitle": "Читы",
+  "setStreakTitle": "Изменить стрик",
+  "setStreakDesc": "Установить произвольное количество дней для стрика"
 }

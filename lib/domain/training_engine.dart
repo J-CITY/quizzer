@@ -47,6 +47,7 @@ class TrainingEngine {
   final _random = Random();
 
   /// Generates a list of [count] questions from [sourceWords].
+  /// Generates a list of questions from [sourceWords], repeating each word up to 3 times with different question types.
   List<Question> generateSession(
     List<Word> sourceWords,
     Settings settings,
@@ -56,15 +57,22 @@ class TrainingEngine {
   }) {
     if (sourceWords.isEmpty) return [];
 
-    final count = settings.questionsCount;
+    // Целевое количество вопросов
+    final targetQuestionsCount = isReviewMode ? sourceWords.length : settings.questionsCount;
+
+    // Рассчитываем необходимое количество уникальных слов (каждое слово до 3 раз)
+    final targetUniqueCount = (targetQuestionsCount / 3).ceil();
+    final actualUniqueCount = min(targetUniqueCount, sourceWords.length);
+
     List<Word> selectedWords;
 
     if (isReviewMode) {
-      // Review mode: take all words in the list, shuffled
+      // Режим повторения: выбираем случайные уникальные слова
       selectedWords = List.from(sourceWords);
       selectedWords.shuffle(_random);
+      selectedWords = selectedWords.take(actualUniqueCount).toList();
     } else {
-      // Learn mode: take up to [count] unlearned words, don't repeat
+      // Режим обучения: выбираем неизученные слова
       List<Word> unlearned = sourceWords.where((w) => w.progress < 5).toList();
 
       if (unlearned.isEmpty) {
@@ -74,16 +82,53 @@ class TrainingEngine {
       unlearned.shuffle(_random);
       unlearned.sort((a, b) => a.progress.compareTo(b.progress));
 
-      final actualCount = min(count, unlearned.length);
-      selectedWords = unlearned.take(actualCount).toList();
+      selectedWords = unlearned.take(actualUniqueCount).toList();
       selectedWords.shuffle(_random);
     }
 
-    return selectedWords
-        .map(
-          (w) => _generateQuestion(w, sourceWords, settings, l10n, customList),
-        )
-        .toList();
+    // Распределяем вопросы между выбранными словами
+    final List<Question> sessionQuestions = [];
+    final wordsWithThree = targetQuestionsCount ~/ 3;
+    final remainder = targetQuestionsCount % 3;
+
+    for (int i = 0; i < selectedWords.length; i++) {
+      final word = selectedWords[i];
+      
+      // Определяем количество вопросов для данного слова
+      int wordQuestionsCount = 0;
+      if (i < wordsWithThree) {
+        wordQuestionsCount = 3;
+      } else if (i == wordsWithThree) {
+        wordQuestionsCount = remainder;
+      }
+
+      if (wordQuestionsCount == 0) continue;
+
+      // Получаем доступные типы вопросов для этого слова
+      final availableTypes = getAvailableQuestionTypes(word, settings, customList);
+
+      // Выбираем уникальные типы вопросов
+      final List<int> chosenTypes = [];
+      List<int> pool = List.from(availableTypes)..shuffle(_random);
+      for (int j = 0; j < wordQuestionsCount; j++) {
+        if (pool.isEmpty) {
+          pool = List.from(availableTypes)..shuffle(_random);
+        }
+        chosenTypes.add(pool.removeLast());
+      }
+
+      // Генерируем вопросы выбранных типов
+      for (final type in chosenTypes) {
+        sessionQuestions.add(
+          _generateQuestion(word, sourceWords, settings, l10n, customList, type),
+        );
+      }
+    }
+
+    // Перемешиваем финальный список вопросов, чтобы они шли вразнобой
+    sessionQuestions.shuffle(_random);
+
+    return sessionQuestions;
   }
 
   Question regenerateQuestionOptions(
@@ -103,14 +148,11 @@ class TrainingEngine {
     );
   }
 
-  Question _generateQuestion(
+  List<int> getAvailableQuestionTypes(
     Word word,
-    List<Word> allWords,
     Settings settings,
-    AppLocalizations l10n,
-    CustomList? customList, [
-    int? forceType,
-  ]) {
+    CustomList? customList,
+  ) {
     List<int> availableTypes = [];
 
     bool useVoiceToTranslate = settings.questionVoiceToTranslate;
@@ -178,6 +220,18 @@ class TrainingEngine {
       availableTypes.add(QuestionType.japToTrans); // Fallback
     }
 
+    return availableTypes;
+  }
+
+  Question _generateQuestion(
+    Word word,
+    List<Word> allWords,
+    Settings settings,
+    AppLocalizations l10n,
+    CustomList? customList, [
+    int? forceType,
+  ]) {
+    final availableTypes = getAvailableQuestionTypes(word, settings, customList);
     final type = forceType ?? availableTypes[_random.nextInt(availableTypes.length)];
 
     String prompt = '';

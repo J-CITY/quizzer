@@ -95,7 +95,10 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
       listLanguage = list.language;
 
       if (!widget.isReviewMode) {
-        await db.updateLearningQueue(list, settings.learningQueueSize);
+        final queueSize = (list.useCustomTrainingSettings && list.learningQueueSize > 0)
+            ? list.learningQueueSize
+            : settings.learningQueueSize;
+        await db.updateLearningQueue(list, queueSize);
         await list.learningQueue.load();
         sourceWords = list.learningQueue.toList();
 
@@ -224,7 +227,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
       }
       _currentTrainingStreak++;
       if (_currentTrainingStreak == _streakThreshold) {
-        _pulseController.forward(from: 0.0).then((_) => _pulseController.reverse());
+        _pulseController
+            .forward(from: 0.0)
+            .then((_) => _pulseController.reverse());
         if (settings.hapticFeedbackEnabled) {
           HapticFeedback.mediumImpact();
           Future.delayed(const Duration(milliseconds: 150), () {
@@ -232,7 +237,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
           });
         }
       } else if (_currentTrainingStreak > _streakThreshold) {
-        _pulseController.forward(from: 0.0).then((_) => _pulseController.reverse());
+        _pulseController
+            .forward(from: 0.0)
+            .then((_) => _pulseController.reverse());
         if (settings.hapticFeedbackEnabled) {
           HapticFeedback.lightImpact();
         }
@@ -340,10 +347,14 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
             q.type == QuestionType.voiceToJapInput) {
           isCorrect =
               (userAnswer.trim() == q.word.japanese.trim()) ||
-              (q.word.reading != null && userAnswer.trim() == q.word.reading!.trim());
+              (q.word.reading != null &&
+                  userAnswer.trim() == q.word.reading!.trim());
         } else if (q.type == QuestionType.japToReading &&
             q.correctAnswer.contains('/')) {
-          final selectedSet = userAnswer.split('/').map((e) => e.trim()).toSet();
+          final selectedSet = userAnswer
+              .split('/')
+              .map((e) => e.trim())
+              .toSet();
           final correctSet = q.correctAnswer
               .split('/')
               .map((e) => e.trim())

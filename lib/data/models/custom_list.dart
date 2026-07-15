@@ -17,14 +17,18 @@ class CustomList {
   String? emoji;
 
   bool syncOnStartup = false;
-  
+
   bool isPinned = false;
 
   final words = IsarLinks<Word>();
-  
+
   final learningQueue = IsarLinks<Word>();
 
   bool useCustomQuestionSettings = false;
+
+  bool useCustomTrainingSettings = false;
+  int questionsCount = 20;
+  int learningQueueSize = 20;
 
   bool questionWordToTranslate = true;
   bool questionTranslateToWord = true;

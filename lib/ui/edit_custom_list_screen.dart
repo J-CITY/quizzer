@@ -35,6 +35,10 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
   bool _syncOnStartup = false;
   bool _isSaving = false;
 
+  bool _useCustomTrainingSettings = false;
+  int _questionsCount = 20;
+  int _learningQueueSize = 20;
+
   bool _useCustomQuestionSettings = false;
   bool _questionWordToTranslate = true;
   bool _questionTranslateToWord = true;
@@ -64,9 +68,18 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
       text: widget.customList?.googleSheetTabName ?? '',
     );
     _languageController = TextEditingController(
-      text: LanguageUtils.getLanguageLabel(widget.customList?.language ?? 'ja-JP'),
+      text: LanguageUtils.getLanguageLabel(
+        widget.customList?.language ?? 'ja-JP',
+      ),
     );
     _syncOnStartup = widget.customList?.syncOnStartup ?? false;
+    _useCustomTrainingSettings =
+        widget.customList?.useCustomTrainingSettings ?? false;
+    _questionsCount = widget.customList?.questionsCount ?? 20;
+    if (_questionsCount < 1) _questionsCount = 20;
+    _learningQueueSize = widget.customList?.learningQueueSize ?? 20;
+    if (_learningQueueSize < 1) _learningQueueSize = 20;
+
     _useCustomQuestionSettings =
         widget.customList?.useCustomQuestionSettings ?? false;
     _questionWordToTranslate =
@@ -87,6 +100,41 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
     _questionTranslateToWordConstructor =
         widget.customList?.questionTranslateToWordConstructor ?? true;
     _questionImageToWord = widget.customList?.questionImageToWord ?? true;
+  }
+
+  Future<void> _showNumberDialog(
+    String title,
+    int initialValue,
+    Function(int) onSave,
+  ) async {
+    final controller = TextEditingController(text: initialValue.toString());
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(AppLocalizations.of(context)!.cancel),
+          ),
+          TextButton(
+            onPressed: () {
+              final val = int.tryParse(controller.text);
+              if (val != null) {
+                onSave(val);
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _save() async {
@@ -110,7 +158,9 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
           _nameController.text = name;
           if (result.containsKey('language') &&
               result['language']!.isNotEmpty) {
-            _languageController.text = LanguageUtils.getLanguageLabel(result['language']!);
+            _languageController.text = LanguageUtils.getLanguageLabel(
+              result['language']!,
+            );
           }
         } else {
           name = sheetId;
@@ -130,7 +180,9 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
     }
 
     final langLabel = _languageController.text.trim();
-    final lang = langLabel.split(' ').first; // Extract ja-JP from "ja-JP (Japanese / japan)"
+    final lang = langLabel
+        .split(' ')
+        .first; // Extract ja-JP from "ja-JP (Japanese / japan)"
     final db = ref.read(databaseServiceProvider);
 
     final isLangValid = await LanguageUtils.validateAndSaveCustomLanguage(
@@ -169,6 +221,10 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
       list.googleSheetTabName = null;
       list.syncOnStartup = false;
     }
+
+    list.useCustomTrainingSettings = _useCustomTrainingSettings;
+    list.questionsCount = _questionsCount;
+    list.learningQueueSize = _learningQueueSize;
 
     list.useCustomQuestionSettings = _useCustomQuestionSettings;
     list.questionWordToTranslate = _questionWordToTranslate;
@@ -321,7 +377,8 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                                     ),
                                     content: Column(
                                       mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           AppLocalizations.of(
@@ -330,12 +387,19 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                                         ),
                                         const SizedBox(height: 16),
                                         InkWell(
-                                          onTap: () => launchUrl(Uri.parse('https://docs.google.com/spreadsheets/d/1MSH2Nz7ehUbukKnRZ2fi0JrNCSoBwp165HA33c3_Kdw/edit?usp=sharing')),
+                                          onTap: () => launchUrl(
+                                            Uri.parse(
+                                              'https://docs.google.com/spreadsheets/d/1MSH2Nz7ehUbukKnRZ2fi0JrNCSoBwp165HA33c3_Kdw/edit?usp=sharing',
+                                            ),
+                                          ),
                                           child: Text(
-                                            AppLocalizations.of(context)!.sheetFormatHintLink,
+                                            AppLocalizations.of(
+                                              context,
+                                            )!.sheetFormatHintLink,
                                             style: const TextStyle(
                                               color: Colors.blue,
-                                              decoration: TextDecoration.underline,
+                                              decoration:
+                                                  TextDecoration.underline,
                                             ),
                                           ),
                                         ),
@@ -384,6 +448,91 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                 ],
               ),
             ],
+            const SizedBox(height: 16),
+            SettingsGroup(
+              title: AppLocalizations.of(context)!.settingsGroupTraining,
+              children: [
+                SettingsTile(
+                  title: AppLocalizations.of(context)!.overrideTrainingSettings,
+                  showDivider: _useCustomTrainingSettings,
+                  trailing: Switch(
+                    value: _useCustomTrainingSettings,
+                    onChanged: (val) {
+                      setState(() => _useCustomTrainingSettings = val);
+                    },
+                  ),
+                ),
+                if (_useCustomTrainingSettings) ...[
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsQuestionsCount,
+                    showDivider: true,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _questionsCount.toString(),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right, color: Colors.grey),
+                      ],
+                    ),
+                    onTap: () {
+                      _showNumberDialog(
+                        AppLocalizations.of(context)!.settingsQuestionsCount,
+                        _questionsCount,
+                        (val) {
+                          setState(() {
+                            int newCount = val < 1 ? 1 : val;
+                            if (newCount > _learningQueueSize) {
+                              _learningQueueSize = newCount;
+                            }
+                            _questionsCount = newCount;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                  SettingsTile(
+                    title: AppLocalizations.of(
+                      context,
+                    )!.settingsLearningQueueSize,
+                    showDivider: false,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _learningQueueSize.toString(),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right, color: Colors.grey),
+                      ],
+                    ),
+                    onTap: () {
+                      _showNumberDialog(
+                        AppLocalizations.of(context)!.settingsLearningQueueSize,
+                        _learningQueueSize,
+                        (val) {
+                          setState(() {
+                            int newSize = val < _questionsCount
+                                ? _questionsCount
+                                : val;
+                            _learningQueueSize = newSize;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ],
+            ),
             const SizedBox(height: 16),
             SettingsGroup(
               title: AppLocalizations.of(context)!.listGroupQuestions,

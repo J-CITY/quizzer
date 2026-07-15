@@ -58,7 +58,8 @@ class TrainingEngine {
     if (sourceWords.isEmpty) return [];
 
     // Целевое количество вопросов
-    final targetQuestionsCount = isReviewMode ? sourceWords.length : settings.questionsCount;
+    final customQuestionsCount = (customList != null && customList.useCustomTrainingSettings && customList.questionsCount > 0) ? customList.questionsCount : settings.questionsCount;
+    final targetQuestionsCount = isReviewMode ? sourceWords.length : customQuestionsCount;
 
     // Рассчитываем необходимое количество уникальных слов (каждое слово до 3 раз)
     final targetUniqueCount = (targetQuestionsCount / 3).ceil();
@@ -253,7 +254,7 @@ class TrainingEngine {
         prompt = word.japanese;
         correctAnswer = word.reading!;
         if (word.reading!.contains('/')) {
-          final correctReadings = word.reading!.split('/').map((e) => e.trim()).toList();
+          final correctReadings = word.reading!.split('/').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
           
           wrongOptions = _getWrongOptions(
             allWords,
@@ -266,7 +267,7 @@ class TrainingEngine {
 
           Set<String> allWrongChips = {};
           for (var w in wrongOptions) {
-            allWrongChips.addAll(w.split('/').map((e) => e.trim()));
+            allWrongChips.addAll(w.split('/').map((e) => e.trim()).where((e) => e.isNotEmpty));
           }
           allWrongChips.removeAll(correctReadings);
 
@@ -359,12 +360,12 @@ class TrainingEngine {
         break;
       case QuestionType.transToJapConstructor:
         prompt = word.translation;
-        correctAnswer = word.japanese;
+        correctAnswer = word.japanese.replaceAll(' ', '');
 
-        final correctChars = word.japanese.split('');
+        final correctChars = word.japanese.replaceAll(' ', '').split('');
         final extraCharsCount = _random.nextInt(correctChars.length + 2) + 1;
         final extraChars = <String>[];
-        final allChars = allWords.map((w) => w.japanese).join('').split('');
+        final allChars = allWords.map((w) => w.japanese.replaceAll(' ', '')).join('').split('');
         allChars.shuffle(_random);
 
         for (final c in allChars) {
@@ -386,12 +387,12 @@ class TrainingEngine {
         break;
       case QuestionType.voiceToJapConstructor:
         prompt = ''; // Handled in UI
-        correctAnswer = word.japanese;
+        correctAnswer = word.japanese.replaceAll(' ', '');
 
-        final correctChars2 = word.japanese.split('');
+        final correctChars2 = word.japanese.replaceAll(' ', '').split('');
         final extraCharsCount2 = _random.nextInt(correctChars2.length + 2) + 1;
         final extraChars2 = <String>[];
-        final allChars2 = allWords.map((w) => w.japanese).join('').split('');
+        final allChars2 = allWords.map((w) => w.japanese.replaceAll(' ', '')).join('').split('');
         allChars2.shuffle(_random);
 
         for (final c in allChars2) {

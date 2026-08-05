@@ -29,6 +29,7 @@ class CustomList {
   bool useCustomTrainingSettings = false;
   int questionsCount = 20;
   int learningQueueSize = 20;
+  int targetWordRepetitions = 3;
 
   bool questionWordToTranslate = true;
   bool questionTranslateToWord = true;

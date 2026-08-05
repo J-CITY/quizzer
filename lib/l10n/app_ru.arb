@@ -23,6 +23,8 @@
   "settingsTitle": "Настройки",
   "settingsQuestionsCount": "Количество вопросов в тренировке",
   "settingsLearningQueueSize": "Размер изучаемых слов",
+  "settingsWordRepetitions": "Количество повторений слова",
+  "progressChangesTitle": "Изменение прогресса",
   "settingsSheetId": "ID Google Таблицы",
   "settingsSheetIdHint": "Например: 1MSH2Nz7ehUbukKnRZ2fi0JrNCSoBwp165HA33c3_Kdw",
   "settingsNotifications": "Уведомления",

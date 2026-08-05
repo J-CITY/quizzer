@@ -4,6 +4,7 @@ import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:confetti/confetti.dart';
 import '../data/models/word.dart';
+import '../data/models/word_progress_change.dart';
 import '../utils/constants.dart';
 import '../data/services/database_service.dart';
 import 'training_screen.dart'; // for ttsProvider
@@ -14,12 +15,14 @@ import '../main.dart'; // To get adsServiceProvider
 
 class TrainingResultScreen extends ConsumerStatefulWidget {
   final List<Word> mistakes;
+  final List<WordProgressChange> progressChanges;
   final int learnedCount;
   final int inProgressCount;
 
   const TrainingResultScreen({
     super.key,
     required this.mistakes,
+    this.progressChanges = const [],
     this.learnedCount = 0,
     this.inProgressCount = 0,
   });
@@ -62,6 +65,72 @@ class _TrainingResultScreenState extends ConsumerState<TrainingResultScreen> {
   void dispose() {
     _confettiController.dispose();
     super.dispose();
+  }
+
+  void _showProgressDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    AppLocalizations.of(context)!.progressChangesTitle,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    itemCount: widget.progressChanges.length,
+                    itemBuilder: (context, index) {
+                      final change = widget.progressChanges[index];
+                      final isUp = change.newProgress > change.oldProgress;
+                      final isDown = change.newProgress < change.oldProgress;
+                      
+                      IconData icon = Icons.remove;
+                      Color iconColor = Colors.grey;
+                      if (isUp) {
+                        icon = Icons.arrow_upward;
+                        iconColor = Colors.green;
+                      } else if (isDown) {
+                        icon = Icons.arrow_downward;
+                        iconColor = Colors.red;
+                      }
+
+                      return ListTile(
+                        title: Text(change.word.japanese),
+                        subtitle: Text('${change.word.reading != null && change.word.reading!.isNotEmpty ? "${change.word.reading} • " : ""}${change.word.translation}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('${change.oldProgress}', style: const TextStyle(fontSize: 16)),
+                            const SizedBox(width: 8),
+                            Icon(icon, color: iconColor, size: 20),
+                            const SizedBox(width: 8),
+                            Text('${change.newProgress}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -172,6 +241,12 @@ class _TrainingResultScreenState extends ConsumerState<TrainingResultScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 24),
+                      TextButton.icon(
+                        icon: const Icon(Icons.bar_chart),
+                        label: Text(AppLocalizations.of(context)!.progressChangesTitle),
+                        onPressed: () => _showProgressDialog(context),
+                      ),
                       const Spacer(flex: 3),
                     ],
                   ),
@@ -213,7 +288,13 @@ class _TrainingResultScreenState extends ConsumerState<TrainingResultScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+                  TextButton.icon(
+                    icon: const Icon(Icons.bar_chart),
+                    label: Text(AppLocalizations.of(context)!.progressChangesTitle),
+                    onPressed: () => _showProgressDialog(context),
+                  ),
+                  const SizedBox(height: 16),
                   Text(
                     AppLocalizations.of(context)!.trainingResultsMistakes(
                       widget.mistakes.length.toString(),

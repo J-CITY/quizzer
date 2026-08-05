@@ -63,6 +63,12 @@ class DatabaseService {
       needsSave = true;
     }
 
+    // Fix Isar default value for new fields (minInt)
+    if (settings.targetWordRepetitions < 1) {
+      settings.targetWordRepetitions = 3;
+      needsSave = true;
+    }
+
     if (needsSave) {
       await isar.writeTxn(() async {
         await isar.settings.put(settings);
@@ -254,7 +260,20 @@ class DatabaseService {
   // --- Custom Lists Methods ---
 
   Future<List<CustomList>> getCustomLists() async {
-    return await isar.customLists.where().findAll();
+    final lists = await isar.customLists.where().findAll();
+    bool needsSave = false;
+    for (var list in lists) {
+      if (list.targetWordRepetitions < 1) {
+        list.targetWordRepetitions = 3;
+        needsSave = true;
+      }
+    }
+    if (needsSave) {
+      await isar.writeTxn(() async {
+        await isar.customLists.putAll(lists);
+      });
+    }
+    return lists;
   }
 
   Future<void> saveCustomList(CustomList list) async {

@@ -38,6 +38,7 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
   bool _useCustomTrainingSettings = false;
   int _questionsCount = 20;
   int _learningQueueSize = 20;
+  int _targetWordRepetitions = 3;
 
   bool _useCustomQuestionSettings = false;
   bool _questionWordToTranslate = true;
@@ -79,6 +80,8 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
     if (_questionsCount < 1) _questionsCount = 20;
     _learningQueueSize = widget.customList?.learningQueueSize ?? 20;
     if (_learningQueueSize < 1) _learningQueueSize = 20;
+    _targetWordRepetitions = widget.customList?.targetWordRepetitions ?? 3;
+    if (_targetWordRepetitions < 1) _targetWordRepetitions = 3;
 
     _useCustomQuestionSettings =
         widget.customList?.useCustomQuestionSettings ?? false;
@@ -225,6 +228,7 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
     list.useCustomTrainingSettings = _useCustomTrainingSettings;
     list.questionsCount = _questionsCount;
     list.learningQueueSize = _learningQueueSize;
+    list.targetWordRepetitions = _targetWordRepetitions;
 
     list.useCustomQuestionSettings = _useCustomQuestionSettings;
     list.questionWordToTranslate = _questionWordToTranslate;
@@ -487,9 +491,6 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                         (val) {
                           setState(() {
                             int newCount = val < 1 ? 1 : val;
-                            if (newCount > _learningQueueSize) {
-                              _learningQueueSize = newCount;
-                            }
                             _questionsCount = newCount;
                           });
                         },
@@ -500,7 +501,7 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                     title: AppLocalizations.of(
                       context,
                     )!.settingsLearningQueueSize,
-                    showDivider: false,
+                    showDivider: true,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -521,10 +522,38 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
                         _learningQueueSize,
                         (val) {
                           setState(() {
-                            int newSize = val < _questionsCount
-                                ? _questionsCount
-                                : val;
+                            int newSize = val < 1 ? 1 : val;
                             _learningQueueSize = newSize;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsWordRepetitions,
+                    showDivider: false,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _targetWordRepetitions.toString(),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right, color: Colors.grey),
+                      ],
+                    ),
+                    onTap: () {
+                      _showNumberDialog(
+                        AppLocalizations.of(context)!.settingsWordRepetitions,
+                        _targetWordRepetitions,
+                        (val) {
+                          setState(() {
+                            int newSize = val < 1 ? 1 : val;
+                            _targetWordRepetitions = newSize;
                           });
                         },
                       );

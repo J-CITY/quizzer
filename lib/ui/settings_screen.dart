@@ -242,9 +242,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         (val) {
                           _updateSettings(settings, () {
                             int newCount = val < 1 ? 1 : val;
-                            if (newCount > settings.learningQueueSize) {
-                              settings.learningQueueSize = newCount;
-                            }
                             settings.questionsCount = newCount;
                           });
                         },
@@ -270,8 +267,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         settings.learningQueueSize,
                         (val) {
                           _updateSettings(settings, () {
-                            int newSize = val < settings.questionsCount ? settings.questionsCount : val;
+                            int newSize = val < 1 ? 1 : val;
                             settings.learningQueueSize = newSize;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsWordRepetitions,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          settings.targetWordRepetitions.toString(),
+                          style: TextStyle(color: accentColor, fontSize: 16),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right, color: Colors.grey),
+                      ],
+                    ),
+                    onTap: () {
+                      _showNumberDialog(
+                        AppLocalizations.of(context)!.settingsWordRepetitions,
+                        settings.targetWordRepetitions,
+                        (val) {
+                          _updateSettings(settings, () {
+                            int newSize = val < 1 ? 1 : val;
+                            settings.targetWordRepetitions = newSize;
                           });
                         },
                       );

@@ -8,6 +8,7 @@ class Settings {
 
   int questionsCount = 50;
   int learningQueueSize = 50;
+  int targetWordRepetitions = 3;
 
   bool notificationsEnabled = true;
   bool streakNotificationsEnabled = false;

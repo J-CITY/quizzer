@@ -50,6 +50,7 @@ class TrainingEngine {
   /// Generates a list of questions from [sourceWords], repeating each word up to 3 times with different question types.
   List<Question> generateSession(
     List<Word> sourceWords,
+    List<Word> dictionaryWords,
     Settings settings,
     AppLocalizations l10n, {
     bool isReviewMode = false,
@@ -61,8 +62,10 @@ class TrainingEngine {
     final customQuestionsCount = (customList != null && customList.useCustomTrainingSettings && customList.questionsCount > 0) ? customList.questionsCount : settings.questionsCount;
     final targetQuestionsCount = isReviewMode ? sourceWords.length : customQuestionsCount;
 
-    // Рассчитываем необходимое количество уникальных слов (каждое слово до 3 раз)
-    final targetUniqueCount = (targetQuestionsCount / 3).ceil();
+    final targetRepetitions = (customList != null && customList.useCustomTrainingSettings && customList.targetWordRepetitions > 0) ? customList.targetWordRepetitions : settings.targetWordRepetitions;
+
+    // Рассчитываем необходимое количество уникальных слов (каждое слово до N раз)
+    final targetUniqueCount = (targetQuestionsCount / targetRepetitions).ceil();
     final actualUniqueCount = min(targetUniqueCount, sourceWords.length);
 
     List<Word> selectedWords;
@@ -89,17 +92,17 @@ class TrainingEngine {
 
     // Распределяем вопросы между выбранными словами
     final List<Question> sessionQuestions = [];
-    final wordsWithThree = targetQuestionsCount ~/ 3;
-    final remainder = targetQuestionsCount % 3;
+    final wordsWithFullReps = targetQuestionsCount ~/ targetRepetitions;
+    final remainder = targetQuestionsCount % targetRepetitions;
 
     for (int i = 0; i < selectedWords.length; i++) {
       final word = selectedWords[i];
       
       // Определяем количество вопросов для данного слова
       int wordQuestionsCount = 0;
-      if (i < wordsWithThree) {
-        wordQuestionsCount = 3;
-      } else if (i == wordsWithThree) {
+      if (i < wordsWithFullReps) {
+        wordQuestionsCount = targetRepetitions;
+      } else if (i == wordsWithFullReps) {
         wordQuestionsCount = remainder;
       }
 
@@ -121,7 +124,7 @@ class TrainingEngine {
       // Генерируем вопросы выбранных типов
       for (final type in chosenTypes) {
         sessionQuestions.add(
-          _generateQuestion(word, sourceWords, settings, l10n, customList, type),
+          _generateQuestion(word, dictionaryWords, settings, l10n, customList, type),
         );
       }
     }

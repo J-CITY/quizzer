@@ -10,6 +10,7 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:isar/isar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../data/models/word.dart';
+import '../data/models/word_progress_change.dart';
 import '../data/models/custom_list.dart';
 import '../domain/training_engine.dart';
 import '../data/services/database_service.dart';
@@ -123,10 +124,16 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
       return;
     }
 
-    _allWords = await db.getAllWords();
+    if (widget.customListId != null) {
+      await _customList!.words.load();
+      _allWords = _customList!.words.toList();
+    } else {
+      _allWords = await db.getAllWords();
+    }
 
     _questions = engine.generateSession(
       sourceWords,
+      _allWords,
       settings,
       AppLocalizations.of(context)!,
       isReviewMode: widget.isReviewMode,
@@ -325,6 +332,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
     final wordsMap = {for (var w in allWords) w.id: w};
 
     final mistakesList = <Word>[];
+    final progressChanges = <WordProgressChange>[];
 
     int learnedCount = 0;
     int inProgressCount = 0;
@@ -375,35 +383,41 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
         final w = wordsMap[wordId];
         if (w == null) continue;
 
+        final oldProgress = w.progress;
+        int newProgress = oldProgress;
+
         final total = wordTotalQuestions[wordId] ?? 0;
         final correct = wordCorrectAnswers[wordId] ?? 0;
 
         if (correct == total) {
           // 100% правильных ответов с первой попытки -> прогресс +1
           if (w.progress < 5) {
-            await db.updateWordProgress(w, w.progress + 1);
+            newProgress = w.progress + 1;
+            await db.updateWordProgress(w, newProgress);
           }
-          if (w.progress >= 5) {
+          if (newProgress >= 5) {
             learnedCount++;
           } else {
             inProgressCount++;
           }
+          progressChanges.add(WordProgressChange(word: w, oldProgress: oldProgress, newProgress: newProgress));
         } else {
           // Были ошибки -> слово идет в список ошибок для отображения в результатах
           mistakesList.add(w);
 
           if (correct < (total / 2.0)) {
             // Менее 50% правильных ответов -> прогресс -1
-            final newProgress = (w.progress > 0) ? w.progress - 1 : 0;
+            newProgress = (w.progress > 0) ? w.progress - 1 : 0;
             await db.updateWordProgress(w, newProgress);
           } else {
             // От 50% до 99% правильных ответов -> прогресс не меняется
-            if (w.progress >= 5) {
+            if (newProgress >= 5) {
               learnedCount++;
             } else {
               inProgressCount++;
             }
           }
+          progressChanges.add(WordProgressChange(word: w, oldProgress: oldProgress, newProgress: newProgress));
         }
       }
     } else {
@@ -414,6 +428,8 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
 
         final total = wordTotalQuestions[wordId] ?? 0;
         final correct = wordCorrectAnswers[wordId] ?? 0;
+        
+        progressChanges.add(WordProgressChange(word: w, oldProgress: w.progress, newProgress: w.progress));
 
         if (correct == total) {
           if (w.progress >= 5) {
@@ -450,6 +466,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
         MaterialPageRoute(
           builder: (_) => TrainingResultScreen(
             mistakes: mistakesList,
+            progressChanges: progressChanges,
             learnedCount: learnedCount,
             inProgressCount: inProgressCount,
           ),

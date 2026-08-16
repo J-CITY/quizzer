@@ -55,6 +55,54 @@ class ProfileService {
     }
   }
 
+  static Future<File> _getAutoBackupFile() async {
+    final docDir = await getApplicationDocumentsDirectory();
+    return File('${docDir.path}/auto_backup.json');
+  }
+
+  static Future<void> createAutoBackup(DatabaseService db) async {
+    try {
+      final settings = await db.getSettings();
+      final lists = await db.getCustomLists();
+      final words = await db.getAllWords();
+      final sessions = await db.getAllTrainingSessions();
+
+      final data = {
+        'settings': _settingsToJson(settings),
+        'customLists': lists.map((e) => _customListToJson(e)).toList(),
+        'words': words.map((e) => _wordToJson(e)).toList(),
+        'trainingSessions': sessions.map((e) => _trainingSessionToJson(e)).toList(),
+      };
+
+      final jsonStr = jsonEncode(data);
+      final file = await _getAutoBackupFile();
+      await file.writeAsString(jsonStr);
+    } catch (e) {
+      debugPrint('Failed to create auto backup: $e');
+    }
+  }
+
+  static Future<bool> hasAutoBackup() async {
+    final file = await _getAutoBackupFile();
+    return file.existsSync();
+  }
+
+  static Future<bool> restoreFromAutoBackup(DatabaseService db) async {
+    try {
+      final file = await _getAutoBackupFile();
+      if (!file.existsSync()) return false;
+
+      final jsonStr = await file.readAsString();
+      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+      
+      await _importData(db, data);
+      return true;
+    } catch (e) {
+      debugPrint('Failed to restore auto backup: $e');
+      return false;
+    }
+  }
+
   static Future<void> importProfile(BuildContext context, DatabaseService db) async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -67,78 +115,7 @@ class ProfileService {
         final jsonStr = await file.readAsString();
         final Map<String, dynamic> data = jsonDecode(jsonStr);
 
-        await db.isar.writeTxn(() async {
-          // Import settings
-          if (data.containsKey('settings')) {
-            final settingsMap = data['settings'] as Map<String, dynamic>;
-            final newSettings = _settingsFromJson(settingsMap);
-            await db.isar.settings.put(newSettings);
-          }
-
-          // Import Words
-          Map<int, int> oldToNewWordIdMap = {};
-          if (data.containsKey('words')) {
-            final wordsList = data['words'] as List<dynamic>;
-            await db.isar.words.clear();
-            for (var wMap in wordsList) {
-              final oldId = wMap['id'] as int;
-              final word = _wordFromJson(wMap);
-              await db.isar.words.put(word);
-              oldToNewWordIdMap[oldId] = word.id;
-            }
-          }
-
-          // Import Custom Lists
-          Map<int, int> oldToNewListIdMap = {};
-          if (data.containsKey('customLists')) {
-            final listsList = data['customLists'] as List<dynamic>;
-            await db.isar.customLists.clear();
-            for (var lMap in listsList) {
-              final oldId = lMap['id'] as int;
-              final list = _customListFromJson(lMap);
-              await db.isar.customLists.put(list);
-              oldToNewListIdMap[oldId] = list.id;
-
-              // Restore links
-              final wordsIds = (lMap['words'] as List<dynamic>).cast<int>();
-              final learningQueueIds = (lMap['learningQueue'] as List<dynamic>).cast<int>();
-
-              for (var wid in wordsIds) {
-                final newId = oldToNewWordIdMap[wid];
-                if (newId != null) {
-                  final word = await db.isar.words.get(newId);
-                  if (word != null) {
-                    list.words.add(word);
-                  }
-                }
-              }
-              for (var wid in learningQueueIds) {
-                final newId = oldToNewWordIdMap[wid];
-                if (newId != null) {
-                  final word = await db.isar.words.get(newId);
-                  if (word != null) {
-                    list.learningQueue.add(word);
-                  }
-                }
-              }
-              await list.words.save();
-              await list.learningQueue.save();
-            }
-          }
-
-          // Import Training Sessions
-          if (data.containsKey('trainingSessions')) {
-            final sessionsList = data['trainingSessions'] as List<dynamic>;
-            await db.isar.trainingSessions.clear();
-            for (var sMap in sessionsList) {
-              final session = _trainingSessionFromJson(sMap);
-              if (session.customListId != null) {
-                session.customListId = oldToNewListIdMap[session.customListId];
-              }
-              await db.isar.trainingSessions.put(session);
-            }
-          }
-        });
+        await _importData(db, data);
 
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -153,6 +130,81 @@ class ProfileService {
         );
       }
     }
+  }
+
+  static Future<void> _importData(DatabaseService db, Map<String, dynamic> data) async {
+    await db.isar.writeTxn(() async {
+      // Import settings
+      if (data.containsKey('settings')) {
+        final settingsMap = data['settings'] as Map<String, dynamic>;
+        final newSettings = _settingsFromJson(settingsMap);
+        await db.isar.settings.put(newSettings);
+      }
+
+      // Import Words
+      Map<int, int> oldToNewWordIdMap = {};
+      if (data.containsKey('words')) {
+        final wordsList = data['words'] as List<dynamic>;
+        await db.isar.words.clear();
+        for (var wMap in wordsList) {
+          final oldId = wMap['id'] as int;
+          final word = _wordFromJson(wMap);
+          await db.isar.words.put(word);
+          oldToNewWordIdMap[oldId] = word.id;
+        }
+      }
+
+      // Import Custom Lists
+      Map<int, int> oldToNewListIdMap = {};
+      if (data.containsKey('customLists')) {
+        final listsList = data['customLists'] as List<dynamic>;
+        await db.isar.customLists.clear();
+        for (var lMap in listsList) {
+          final oldId = lMap['id'] as int;
+          final list = _customListFromJson(lMap);
+          await db.isar.customLists.put(list);
+          oldToNewListIdMap[oldId] = list.id;
+
+          // Restore links
+          final wordsIds = (lMap['words'] as List<dynamic>).cast<int>();
+          final learningQueueIds = (lMap['learningQueue'] as List<dynamic>).cast<int>();
+
+          for (var wid in wordsIds) {
+            final newId = oldToNewWordIdMap[wid];
+            if (newId != null) {
+              final word = await db.isar.words.get(newId);
+              if (word != null) {
+                list.words.add(word);
+              }
+            }
+          }
+          for (var wid in learningQueueIds) {
+            final newId = oldToNewWordIdMap[wid];
+            if (newId != null) {
+              final word = await db.isar.words.get(newId);
+              if (word != null) {
+                list.learningQueue.add(word);
+              }
+            }
+          }
+          await list.words.save();
+          await list.learningQueue.save();
+        }
+      }
+
+      // Import Training Sessions
+      if (data.containsKey('trainingSessions')) {
+        final sessionsList = data['trainingSessions'] as List<dynamic>;
+        await db.isar.trainingSessions.clear();
+        for (var sMap in sessionsList) {
+          final session = _trainingSessionFromJson(sMap);
+          if (session.customListId != null) {
+            session.customListId = oldToNewListIdMap[session.customListId];
+          }
+          await db.isar.trainingSessions.put(session);
+        }
+      }
+    });
   }
 
   // Mappers
@@ -187,6 +239,10 @@ class ProfileService {
       'customConfusableGroups': settings.customConfusableGroups,
       'questionImageToWord': settings.questionImageToWord,
       'hasSeenTutorial': settings.hasSeenTutorial,
+      'flashcardShowWord': settings.flashcardShowWord,
+      'flashcardShowReading': settings.flashcardShowReading,
+      'flashcardShowTranslation': settings.flashcardShowTranslation,
+      'flashcardShowImage': settings.flashcardShowImage,
     };
   }
 
@@ -219,7 +275,11 @@ class ProfileService {
       ..confusableCharactersSheetId = map['confusableCharactersSheetId']
       ..customConfusableGroups = (map['customConfusableGroups'] as List?)?.cast<String>() ?? []
       ..questionImageToWord = map['questionImageToWord'] ?? true
-      ..hasSeenTutorial = map['hasSeenTutorial'] ?? false;
+      ..hasSeenTutorial = map['hasSeenTutorial'] ?? false
+      ..flashcardShowWord = map['flashcardShowWord'] ?? true
+      ..flashcardShowReading = map['flashcardShowReading'] ?? true
+      ..flashcardShowTranslation = map['flashcardShowTranslation'] ?? true
+      ..flashcardShowImage = map['flashcardShowImage'] ?? true;
   }
 
   static Map<String, dynamic> _customListToJson(CustomList list) {

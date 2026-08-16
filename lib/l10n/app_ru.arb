@@ -222,5 +222,15 @@
   "hapticFeedbackDesc": "Вибрация при стриках и ошибках",
   "cheatMenuTitle": "Читы",
   "setStreakTitle": "Изменить стрик",
-  "setStreakDesc": "Установить произвольное количество дней для стрика"
+  "setStreakDesc": "Установить произвольное количество дней для стрика",
+  "flashcardsMode": "Просмотр карточек",
+  "flashcardsSettingsTitle": "Настройки карточек",
+  "flashcardFrontSide": "Отображать на лицевой стороне:",
+  "flashcardShowWord": "Слово",
+  "flashcardShowReading": "Чтение (Транскрипция)",
+  "flashcardShowTranslation": "Перевод",
+  "flashcardShowImage": "Картинка",
+  "startViewing": "Начать просмотр",
+  "trainingMode": "Тренировка",
+  "selectMode": "Выберите режим"
 }

@@ -54,4 +54,9 @@ class Settings {
   String searchTargetLanguage = 'ja-JP';
 
   bool hasSeenTutorial = false;
+
+  bool flashcardShowWord = true;
+  bool flashcardShowReading = true;
+  bool flashcardShowTranslation = true;
+  bool flashcardShowImage = true;
 }

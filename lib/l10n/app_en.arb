@@ -221,6 +221,16 @@
   "hapticFeedback": "Haptic feedback",
   "hapticFeedbackDesc": "Vibrate on streaks and mistakes",
   "cheatMenuTitle": "Cheats",
-  "setStreakTitle": "Change Streak",
-  "setStreakDesc": "Set an arbitrary number of days for your streak"
+  "setStreakTitle": "Set Streak",
+  "setStreakDesc": "Set custom number of days for streak",
+  "flashcardsMode": "Flashcards",
+  "flashcardsSettingsTitle": "Flashcard Settings",
+  "flashcardFrontSide": "Show on front side:",
+  "flashcardShowWord": "Word",
+  "flashcardShowReading": "Reading",
+  "flashcardShowTranslation": "Translation",
+  "flashcardShowImage": "Image",
+  "startViewing": "Start viewing",
+  "trainingMode": "Training",
+  "selectMode": "Select mode"
 }

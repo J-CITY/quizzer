@@ -1206,7 +1206,8 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
         children: [
           if (!hasAnswered) ...[
             Container(
-              height: 70,
+              constraints: const BoxConstraints(minHeight: 70),
+              width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey),
@@ -1216,51 +1217,52 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
                   ? const Center(
                       child: Text(" ", style: TextStyle(fontSize: 24)),
                     )
-                  : Theme(
-                      data: Theme.of(
-                        context,
-                      ).copyWith(canvasColor: Colors.transparent),
-                      child: ReorderableListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        buildDefaultDragHandles: false,
-                        itemCount: _selectedCharIndices.length,
-                        onReorder: (oldIndex, newIndex) {
-                          setState(() {
-                            if (oldIndex < newIndex) {
-                              newIndex -= 1;
-                            }
-                            final item = _selectedCharIndices.removeAt(
-                              oldIndex,
+                  : Wrap(
+                      spacing: 8.0,
+                      runSpacing: 8.0,
+                      children: List.generate(_selectedCharIndices.length, (index) {
+                        final charIndex = _selectedCharIndices[index];
+                        final char = q.options[charIndex];
+                        final chipWidget = InputChip(
+                          label: Text(
+                            char,
+                            style: const TextStyle(fontSize: 20),
+                          ),
+                          onDeleted: () {
+                            setState(() {
+                              _selectedCharIndices.removeAt(index);
+                            });
+                          },
+                          deleteIcon: const Icon(Icons.close, size: 18),
+                        );
+
+                        return DragTarget<int>(
+                          onWillAcceptWithDetails: (details) => true,
+                          onAcceptWithDetails: (details) {
+                            setState(() {
+                              final oldIndex = details.data;
+                              if (oldIndex != index) {
+                                final item = _selectedCharIndices.removeAt(oldIndex);
+                                _selectedCharIndices.insert(index, item);
+                              }
+                            });
+                          },
+                          builder: (context, candidateData, rejectedData) {
+                            return Draggable<int>(
+                              data: index,
+                              feedback: Material(
+                                color: Colors.transparent,
+                                child: chipWidget,
+                              ),
+                              childWhenDragging: Opacity(
+                                opacity: 0.3,
+                                child: chipWidget,
+                              ),
+                              child: chipWidget,
                             );
-                            _selectedCharIndices.insert(newIndex, item);
-                          });
-                        },
-                        itemBuilder: (context, index) {
-                          final charIndex = _selectedCharIndices[index];
-                          final char = q.options[charIndex];
-                          return ReorderableDragStartListener(
-                            key: ValueKey('chip_${charIndex}_$index'),
-                            index: index,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4.0,
-                              ),
-                              child: InputChip(
-                                label: Text(
-                                  char,
-                                  style: const TextStyle(fontSize: 20),
-                                ),
-                                onDeleted: () {
-                                  setState(() {
-                                    _selectedCharIndices.removeAt(index);
-                                  });
-                                },
-                                deleteIcon: const Icon(Icons.close, size: 18),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                          },
+                        );
+                      }),
                     ),
             ),
             const SizedBox(height: 16),

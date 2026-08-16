@@ -9,6 +9,7 @@ import 'statistics_screen.dart';
 import 'search_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/services/database_service.dart';
+import '../data/services/profile_service.dart';
 import 'tutorial_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -38,12 +39,58 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.didChangeDependencies();
     if (!_isTutorialChecked) {
       _isTutorialChecked = true;
-      _checkTutorial();
+      _checkMigrationAndTutorial();
     }
   }
 
-  Future<void> _checkTutorial() async {
+  Future<void> _checkMigrationAndTutorial() async {
     final db = ref.read(databaseServiceProvider);
+    
+    if (db.wasReset) {
+      final hasBackup = await ProfileService.hasAutoBackup();
+      if (hasBackup && mounted) {
+        final shouldRestore = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            title: const Text(
+              'Восстановление базы данных',
+              style: TextStyle(color: Colors.white),
+            ),
+            content: Text(
+              'Формат базы данных изменился, и она была очищена. Найдена автоматическая резервная копия. Восстановить ваши данные?',
+              style: TextStyle(color: Colors.white.withAlpha(200)),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Нет', style: TextStyle(color: Colors.white.withAlpha(150))),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text('Восстановить', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldRestore == true) {
+          final success = await ProfileService.restoreFromAutoBackup(db);
+          if (success && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Данные успешно восстановлены!')),
+            );
+          } else if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Ошибка при восстановлении данных')),
+            );
+          }
+        }
+      }
+      db.wasReset = false;
+    }
+
     final settings = await db.getSettings();
     if (!settings.hasSeenTutorial && mounted) {
       _showTutorial();

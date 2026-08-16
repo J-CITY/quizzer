@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/word.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'profile_service.dart';
 import '../models/custom_list.dart';
 import '../models/settings.dart';
 import '../models/training_session.dart';
@@ -14,6 +15,7 @@ final databaseServiceProvider = Provider<DatabaseService>((ref) {
 
 class DatabaseService {
   late final Isar isar;
+  bool wasReset = false;
 
   Future<void> init() async {
     final dir = await getApplicationDocumentsDirectory();
@@ -31,6 +33,8 @@ class DatabaseService {
       if (file.existsSync()) file.deleteSync();
       if (lockFile.existsSync()) lockFile.deleteSync();
 
+      wasReset = true;
+
       isar = await Isar.open([
         WordSchema,
         CustomListSchema,
@@ -42,6 +46,11 @@ class DatabaseService {
     await _initSettings();
     await _applySpacedRepetition();
     await cleanUpOrphanedWords();
+
+    if (!wasReset) {
+      // Background backup, do not await
+      ProfileService.createAutoBackup(this);
+    }
   }
 
   Future<void> _initSettings() async {
@@ -149,13 +158,13 @@ class DatabaseService {
       if (word.isManuallyLearned) continue;
       if (word.lastTrained != null) {
         final diff = now.difference(word.lastTrained!).inDays;
-        
+
         int intervalIndex = word.timesLearned > 0 ? word.timesLearned - 1 : 0;
         if (intervalIndex >= _spacedRepetitionIntervals.length) {
           intervalIndex = _spacedRepetitionIntervals.length - 1;
         }
         final requiredDays = _spacedRepetitionIntervals[intervalIndex];
-        
+
         if (diff >= requiredDays) {
           word.progress = 4;
           wordsToUpdate.add(word);
@@ -300,13 +309,13 @@ class DatabaseService {
       await list.words.load();
       usedWordIds.addAll(list.words.map((w) => w.id));
     }
-    
+
     final allWords = await isar.words.where().findAll();
     final wordsToDelete = allWords
         .where((w) => !usedWordIds.contains(w.id))
         .map((w) => w.id)
         .toList();
-    
+
     if (wordsToDelete.isNotEmpty) {
       await isar.writeTxn(() async {
         await isar.words.deleteAll(wordsToDelete);
@@ -335,13 +344,15 @@ class DatabaseService {
 
   Future<void> setStreakCheat(int desiredStreak) async {
     final existingSessions = await isar.trainingSessions.where().findAll();
-    final existingDates = existingSessions.map((s) => DateTime(s.date.year, s.date.month, s.date.day)).toSet();
+    final existingDates = existingSessions
+        .map((s) => DateTime(s.date.year, s.date.month, s.date.day))
+        .toSet();
 
     await isar.writeTxn(() async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
       if (desiredStreak > 0) {
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
-        
         final sessionsToAdd = <TrainingSession>[];
         for (int i = 0; i < desiredStreak; i++) {
           final checkDate = today.subtract(Duration(days: i));
@@ -353,9 +364,28 @@ class DatabaseService {
             );
           }
         }
-        
+
         if (sessionsToAdd.isNotEmpty) {
           await isar.trainingSessions.putAll(sessionsToAdd);
+        }
+
+        final breakingDate = today.subtract(Duration(days: desiredStreak));
+        final sessionsToDelete = existingSessions.where((s) {
+          final d = DateTime(s.date.year, s.date.month, s.date.day);
+          return d == breakingDate;
+        }).map((s) => s.id).toList();
+
+        if (sessionsToDelete.isNotEmpty) {
+          await isar.trainingSessions.deleteAll(sessionsToDelete);
+        }
+      } else {
+        final sessionsToDelete = existingSessions.where((s) {
+          final d = DateTime(s.date.year, s.date.month, s.date.day);
+          return d == today || d == today.subtract(const Duration(days: 1));
+        }).map((s) => s.id).toList();
+
+        if (sessionsToDelete.isNotEmpty) {
+          await isar.trainingSessions.deleteAll(sessionsToDelete);
         }
       }
     });

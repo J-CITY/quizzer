@@ -8,6 +8,7 @@ import '../data/models/custom_list.dart';
 import '../data/services/database_service.dart';
 import '../data/services/google_sheets_service.dart';
 import 'training_screen.dart';
+import 'flashcards_screen.dart';
 import '../utils/constants.dart';
 import 'widgets/acrylic_card.dart';
 import 'widgets/glow_button.dart';
@@ -449,8 +450,124 @@ class _CustomListDetailsScreenState
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              GlowButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showFlashcardsSettings();
+                },
+                isPrimary: false,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.style),
+                    const SizedBox(width: 8),
+                    Text(
+                      AppLocalizations.of(context)!.flashcardsMode,
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  void _showFlashcardsSettings() async {
+    final db = ref.read(databaseServiceProvider);
+    final settings = await db.getSettings();
+
+    bool showWord = settings.flashcardShowWord;
+    bool showReading = settings.flashcardShowReading;
+    bool showTranslation = settings.flashcardShowTranslation;
+    bool showImage = settings.flashcardShowImage;
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    AppLocalizations.of(context)!.flashcardsSettingsTitle,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    AppLocalizations.of(context)!.flashcardFrontSide,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.flashcardShowWord),
+                    value: showWord,
+                    onChanged: (val) => setModalState(() => showWord = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.flashcardShowReading),
+                    value: showReading,
+                    onChanged: (val) => setModalState(() => showReading = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.flashcardShowTranslation),
+                    value: showTranslation,
+                    onChanged: (val) => setModalState(() => showTranslation = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    title: Text(AppLocalizations.of(context)!.flashcardShowImage),
+                    value: showImage,
+                    onChanged: (val) => setModalState(() => showImage = val ?? true),
+                  ),
+                  const SizedBox(height: 24),
+                  GlowButton(
+                    onPressed: () async {
+                      settings.flashcardShowWord = showWord;
+                      settings.flashcardShowReading = showReading;
+                      settings.flashcardShowTranslation = showTranslation;
+                      settings.flashcardShowImage = showImage;
+                      await db.saveSettings(settings);
+
+                      if (mounted) {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FlashcardsScreen(
+                              customListId: widget.customList.id,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    child: Text(
+                      AppLocalizations.of(context)!.startViewing,
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );

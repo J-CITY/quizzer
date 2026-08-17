@@ -740,8 +740,10 @@ class _CustomListDetailsScreenState
                 final bool isEditingMode = _mode == _ListMode.selectToDelete && !isGoogleSheetList;
 
                 if (_searchQuery.isNotEmpty || !isEditingMode) {
-                  return ListView.builder(
-                    itemCount: filteredWords.length,
+                  return Scrollbar(
+                    interactive: true,
+                    child: ListView.builder(
+                      itemCount: filteredWords.length,
                     itemBuilder: (context, index) {
                       final word = filteredWords[index];
                       final isLearned = word.progress >= 5;
@@ -860,13 +862,15 @@ class _CustomListDetailsScreenState
                         ),
                       );
                     },
-                  );
+                  ));
                 } else {
                   filteredWords.sort(
                     (a, b) => a.orderIndex.compareTo(b.orderIndex),
                   );
-                  return ReorderableListView.builder(
-                    itemCount: filteredWords.length,
+                  return Scrollbar(
+                    interactive: true,
+                    child: ReorderableListView.builder(
+                      itemCount: filteredWords.length,
                     onReorder: (oldIndex, newIndex) async {
                       if (newIndex > oldIndex) newIndex -= 1;
                       final word = filteredWords.removeAt(oldIndex);
@@ -958,7 +962,7 @@ class _CustomListDetailsScreenState
                         ),
                       );
                     },
-                  );
+                  ));
                 }
               }(),
             ),

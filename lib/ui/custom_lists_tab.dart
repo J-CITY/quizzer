@@ -107,8 +107,10 @@ class _CustomListsTabState extends ConsumerState<CustomListsTab> {
                           ),
                         ),
                       )
-                    : ListView.builder(
-                        itemCount: filteredLists.length,
+                    : Scrollbar(
+                        interactive: true,
+                        child: ListView.builder(
+                          itemCount: filteredLists.length,
                         itemBuilder: (context, index) {
                           final list = filteredLists[index];
                           final wordsList = list.words.toList();
@@ -199,7 +201,7 @@ class _CustomListsTabState extends ConsumerState<CustomListsTab> {
                             ),
                           );
                         },
-                      ),
+                      )),
               ),
             ],
           );

@@ -216,7 +216,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       appBar: AppBar(title: Text(AppLocalizations.of(context)!.settingsTitle)),
       body: settingsAsync.when(
         data: (settings) {
-          return ListView(
+          return Scrollbar(
+            interactive: true,
+            child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             children: [
               SettingsGroup(
@@ -707,7 +709,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
               const SizedBox(height: 32),
             ],
-          );
+          ));
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('Error: $err')),

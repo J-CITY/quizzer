@@ -66,8 +66,8 @@ class GoogleSheetsService {
 
     if (response.statusCode == 200) {
       // Decode with UTF-8 to handle Japanese and Russian characters properly
-      final csvString = utf8.decode(response.bodyBytes);
-      final List<List<dynamic>> rows = const CsvToListConverter().convert(
+      final csvString = utf8.decode(response.bodyBytes).replaceAll('\r\n', '\n');
+      final List<List<dynamic>> rows = const CsvToListConverter(eol: '\n').convert(
         csvString,
       );
 
@@ -137,8 +137,8 @@ class GoogleSheetsService {
     final response = await http.get(url);
 
     if (response.statusCode == 200) {
-      final csvString = utf8.decode(response.bodyBytes);
-      final List<List<dynamic>> rows = const CsvToListConverter().convert(
+      final csvString = utf8.decode(response.bodyBytes).replaceAll('\r\n', '\n');
+      final List<List<dynamic>> rows = const CsvToListConverter(eol: '\n').convert(
         csvString,
       );
 

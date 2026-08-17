@@ -59,6 +59,7 @@ class _CustomListDetailsScreenState
     try {
       final words = await GoogleSheetsService.fetchWords(
         widget.customList.googleSheetId!,
+        sheetName: widget.customList.googleSheetTabName,
       );
       final db = ref.read(databaseServiceProvider);
       await db.syncWordsForList(widget.customList, words);

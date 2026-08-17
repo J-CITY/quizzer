@@ -158,6 +158,9 @@ class _EditCustomListScreenState extends ConsumerState<EditCustomListScreen> {
             result.containsKey('name') &&
             result['name']!.isNotEmpty) {
           name = result['name']!;
+          if (sheetTabName.isNotEmpty) {
+            name = '$name $sheetTabName';
+          }
           _nameController.text = name;
           if (result.containsKey('language') &&
               result['language']!.isNotEmpty) {

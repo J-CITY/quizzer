@@ -50,7 +50,10 @@ void main() async {
     if (list.syncOnStartup &&
         list.googleSheetId != null &&
         list.googleSheetId!.isNotEmpty) {
-      GoogleSheetsService.fetchWords(list.googleSheetId!)
+      GoogleSheetsService.fetchWords(
+            list.googleSheetId!,
+            sheetName: list.googleSheetTabName,
+          )
           .then((words) {
             dbService.syncWordsForList(list, words);
           })

@@ -67,6 +67,21 @@ class ProfileService {
       final words = await db.getAllWords();
       final sessions = await db.getAllTrainingSessions();
 
+      final file = await _getAutoBackupFile();
+      
+      // Safety guard: prevent overwriting a populated backup with an empty database
+      if (file.existsSync() && words.isEmpty) {
+        try {
+          final jsonStr = await file.readAsString();
+          final oldData = jsonDecode(jsonStr) as Map<String, dynamic>;
+          final oldWords = oldData['words'] as List<dynamic>?;
+          if (oldWords != null && oldWords.isNotEmpty) {
+            debugPrint('Safety check: preventing empty database from overwriting existing populated auto backup.');
+            return;
+          }
+        } catch (_) {}
+      }
+
       final data = {
         'settings': _settingsToJson(settings),
         'customLists': lists.map((e) => _customListToJson(e)).toList(),
@@ -75,7 +90,6 @@ class ProfileService {
       };
 
       final jsonStr = jsonEncode(data);
-      final file = await _getAutoBackupFile();
       await file.writeAsString(jsonStr);
     } catch (e) {
       debugPrint('Failed to create auto backup: $e');
@@ -243,6 +257,9 @@ class ProfileService {
       'flashcardShowReading': settings.flashcardShowReading,
       'flashcardShowTranslation': settings.flashcardShowTranslation,
       'flashcardShowImage': settings.flashcardShowImage,
+      'randomWordNotificationEnabled': settings.randomWordNotificationEnabled,
+      'randomWordNotificationIntervalMinutes': settings.randomWordNotificationIntervalMinutes,
+      'randomWordNotificationListId': settings.randomWordNotificationListId,
     };
   }
 
@@ -279,7 +296,10 @@ class ProfileService {
       ..flashcardShowWord = map['flashcardShowWord'] ?? true
       ..flashcardShowReading = map['flashcardShowReading'] ?? true
       ..flashcardShowTranslation = map['flashcardShowTranslation'] ?? true
-      ..flashcardShowImage = map['flashcardShowImage'] ?? true;
+      ..flashcardShowImage = map['flashcardShowImage'] ?? true
+      ..randomWordNotificationEnabled = map['randomWordNotificationEnabled'] ?? false
+      ..randomWordNotificationIntervalMinutes = map['randomWordNotificationIntervalMinutes'] ?? 60
+      ..randomWordNotificationListId = map['randomWordNotificationListId'];
   }
 
   static Map<String, dynamic> _customListToJson(CustomList list) {

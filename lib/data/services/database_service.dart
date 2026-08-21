@@ -18,6 +18,11 @@ class DatabaseService {
   bool wasReset = false;
 
   Future<void> init() async {
+    if (Isar.getInstance() != null) {
+      isar = Isar.getInstance()!;
+      return;
+    }
+    
     final dir = await getApplicationDocumentsDirectory();
     try {
       isar = await Isar.open([
@@ -75,6 +80,11 @@ class DatabaseService {
     // Fix Isar default value for new fields (minInt)
     if (settings.targetWordRepetitions < 1) {
       settings.targetWordRepetitions = 3;
+      needsSave = true;
+    }
+
+    if (settings.randomWordNotificationIntervalMinutes < 1) {
+      settings.randomWordNotificationIntervalMinutes = 60;
       needsSave = true;
     }
 

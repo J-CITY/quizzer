@@ -232,5 +232,13 @@
   "flashcardShowImage": "Image",
   "startViewing": "Start viewing",
   "trainingMode": "Training",
-  "selectMode": "Select mode"
+  "selectMode": "Select mode",
+  "randomWordNotifTitle": "Random Word Notifications",
+  "randomWordNotifDesc": "Periodically shows a random word card",
+  "randomWordNotifList": "Source List",
+  "randomListOption": "Random List (All Words)",
+  "playWord": "Play",
+  "cheatTestTrainingNotif": "Test Training Notification",
+  "cheatTestStreakNotif": "Test Streak Notification",
+  "cheatTestRandomNotif": "Test Random Notification"
 }

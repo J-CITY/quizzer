@@ -585,6 +585,121 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ] else ...[
                     // Just to not leave trailing divider if hidden
                     const SizedBox(height: 1),
+                  ],
+                  const Divider(height: 1),
+                  SettingsTile(
+                    title: AppLocalizations.of(context)!.randomWordNotifTitle,
+                    subtitle: AppLocalizations.of(context)!.randomWordNotifDesc,
+                    trailing: Switch(
+                      value: settings.randomWordNotificationEnabled,
+                      onChanged: (val) {
+                        _updateSettings(settings, () {
+                          settings.randomWordNotificationEnabled = val;
+                        });
+                        if (val) {
+                          NotificationService.updateRandomWordSchedule(settings.randomWordNotificationIntervalMinutes);
+                        } else {
+                          NotificationService.cancelRandomWordSchedule();
+                        }
+                      },
+                    ),
+                  ),
+                  if (settings.randomWordNotificationEnabled) ...[
+                    SettingsTile(
+                      title: AppLocalizations.of(context)!.notificationFrequency,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _getFrequencyText(settings.randomWordNotificationIntervalMinutes),
+                            style: TextStyle(color: accentColor, fontSize: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.chevron_right, color: Colors.grey),
+                        ],
+                      ),
+                      onTap: () async {
+                        final val = await showDialog<int>(
+                          context: context,
+                          builder: (context) => SimpleDialog(
+                            title: Text(AppLocalizations.of(context)!.notificationFrequency),
+                            children: [30, 60, 90, 120, 180, 360, 1440].map((e) {
+                              return SimpleDialogOption(
+                                onPressed: () => Navigator.pop(context, e),
+                                child: Text(_getFrequencyText(e)),
+                              );
+                            }).toList(),
+                          ),
+                        );
+                        if (val != null) {
+                          _updateSettings(settings, () {
+                            settings.randomWordNotificationIntervalMinutes = val;
+                          });
+                          NotificationService.updateRandomWordSchedule(val);
+                        }
+                      },
+                    ),
+                    SettingsTile(
+                      title: AppLocalizations.of(context)!.randomWordNotifList,
+                      showDivider: false,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FutureBuilder<String>(
+                            future: settings.randomWordNotificationListId == null
+                                ? Future.value(AppLocalizations.of(context)!.randomListOption)
+                                : ref.read(databaseServiceProvider).getCustomLists().then(
+                                    (lists) => lists.firstWhere(
+                                      (l) => l.id == settings.randomWordNotificationListId,
+                                      orElse: () => throw Exception(),
+                                    ).name,
+                                  ).catchError((_) => 'Unknown'),
+                            builder: (context, snapshot) {
+                              return ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 150),
+                                child: Text(
+                                  snapshot.data ?? '...',
+                                  style: TextStyle(color: accentColor, fontSize: 16),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.chevron_right, color: Colors.grey),
+                        ],
+                      ),
+                      onTap: () async {
+                        final lists = await ref.read(databaseServiceProvider).getCustomLists();
+                        if (context.mounted) {
+                          final selected = await showModalBottomSheet<int?>(
+                            context: context,
+                            builder: (context) {
+                              return ListView(
+                                children: [
+                                  ListTile(
+                                    title: Text(AppLocalizations.of(context)!.randomListOption),
+                                    onTap: () => Navigator.pop(context, -1), // -1 will represent null (all words)
+                                  ),
+                                  ...lists.map((l) => ListTile(
+                                    title: Text(l.name),
+                                    onTap: () => Navigator.pop(context, l.id),
+                                  )),
+                                ],
+                              );
+                            },
+                          );
+                          
+                          if (selected != null) {
+                            _updateSettings(settings, () {
+                              settings.randomWordNotificationListId = selected == -1 ? null : selected;
+                            });
+                          }
+                        }
+                      },
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 1),
                   ]
                 ],
               ),
@@ -687,7 +802,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     SettingsTile(
                       title: AppLocalizations.of(context)!.setStreakTitle,
                       subtitle: AppLocalizations.of(context)!.setStreakDesc,
-                      showDivider: false,
+                      showDivider: true,
                       trailing: const Icon(Icons.edit, color: Colors.blue),
                       onTap: () {
                         _showNumberDialog(
@@ -702,6 +817,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             }
                           },
                         );
+                      },
+                    ),
+                    SettingsTile(
+                      title: 'Restore Auto Backup',
+                      showDivider: true,
+                      trailing: const Icon(Icons.restore_page, color: Colors.red),
+                      onTap: () async {
+                        final success = await ProfileService.restoreFromAutoBackup(ref.read(databaseServiceProvider));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(success ? 'Backup restored successfully!' : 'No backup found or failed to restore.')),
+                          );
+                          ref.refresh(settingsProvider);
+                        }
+                      },
+                    ),
+                    SettingsTile(
+                      title: AppLocalizations.of(context)!.cheatTestTrainingNotif,
+                      showDivider: true,
+                      trailing: const Icon(Icons.notifications, color: Colors.blue),
+                      onTap: () {
+                        NotificationService.testNotification('training', ref.read(databaseServiceProvider));
+                      },
+                    ),
+                    SettingsTile(
+                      title: AppLocalizations.of(context)!.cheatTestStreakNotif,
+                      showDivider: true,
+                      trailing: const Icon(Icons.local_fire_department, color: Colors.orange),
+                      onTap: () {
+                        NotificationService.testNotification('streak', ref.read(databaseServiceProvider));
+                      },
+                    ),
+                    SettingsTile(
+                      title: AppLocalizations.of(context)!.cheatTestRandomNotif,
+                      showDivider: false,
+                      trailing: const Icon(Icons.shuffle, color: Colors.purple),
+                      onTap: () {
+                        NotificationService.testNotification('random', ref.read(databaseServiceProvider));
                       },
                     ),
                   ],

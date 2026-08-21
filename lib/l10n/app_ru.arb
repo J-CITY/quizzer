@@ -232,5 +232,13 @@
   "flashcardShowImage": "Картинка",
   "startViewing": "Начать просмотр",
   "trainingMode": "Тренировка",
-  "selectMode": "Выберите режим"
+  "selectMode": "Выберите режим",
+  "randomWordNotifTitle": "Случайное слово",
+  "randomWordNotifDesc": "Периодически показывать случайное слово",
+  "randomWordNotifList": "Исходный список",
+  "randomListOption": "Любой список (все слова)",
+  "playWord": "Прослушать",
+  "cheatTestTrainingNotif": "Тест уведомления о тренировке",
+  "cheatTestStreakNotif": "Тест уведомления о стрике",
+  "cheatTestRandomNotif": "Тест случайного слова"
 }

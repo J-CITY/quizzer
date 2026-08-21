@@ -3,10 +3,62 @@ import 'package:workmanager/workmanager.dart';
 import 'package:quizzer/utils/constants.dart';
 import 'dart:io';
 import 'database_service.dart';
+import '../models/custom_list.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:quizzer/l10n/app_localizations.dart';
+
+Future<String> _downloadAndSaveFile(String url, String fileName) async {
+  final Directory directory = await getApplicationDocumentsDirectory();
+  final String filePath = '${directory.path}/$fileName';
+  final http.Response response = await http.get(Uri.parse(url));
+  final File file = File(filePath);
+  await file.writeAsBytes(response.bodyBytes);
+  return filePath;
+}
+
+void notificationTapForeground(NotificationResponse notificationResponse) async {
+  if (notificationResponse.actionId == 'play_word') {
+    final payload = notificationResponse.payload;
+    if (payload != null) {
+      final parts = payload.split('|');
+      if (parts.length >= 2) {
+        final lang = parts[0];
+        final text = parts[1];
+        final tts = FlutterTts();
+        await tts.setVolume(1.0);
+        await tts.setLanguage(lang);
+        await tts.speak(text);
+      }
+    }
+  }
+}
+
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse notificationResponse) async {
+  if (notificationResponse.actionId == 'play_word') {
+    final payload = notificationResponse.payload;
+    if (payload != null) {
+      final parts = payload.split('|');
+      if (parts.length >= 2) {
+        final lang = parts[0];
+        final text = parts[1];
+        ui.DartPluginRegistrant.ensureInitialized();
+        WidgetsFlutterBinding.ensureInitialized();
+        final tts = FlutterTts();
+        await tts.setVolume(1.0);
+        await tts.setLanguage(lang);
+        await tts.speak(text);
+        // Keep the background isolate alive long enough for the speech to finish
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    }
+  }
+}
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -111,6 +163,76 @@ void callbackDispatcher() {
         }
       }
     }
+    
+    // Логика случайного слова
+    if (task == 'random_word_notification' || task == Workmanager.iOSBackgroundTask) {
+      if (settings.randomWordNotificationEnabled) {
+        var words = <dynamic>[];
+        CustomList? list;
+        if (settings.randomWordNotificationListId != null) {
+          list = await db.isar.customLists.get(settings.randomWordNotificationListId!);
+          if (list != null) {
+            await list.words.load();
+            words = list.words.toList();
+          }
+        } else {
+          words = await db.getAllWords();
+        }
+
+        if (words.isNotEmpty) {
+          words.shuffle();
+          final word = words.first;
+          
+          final title = word.reading != null && word.reading!.isNotEmpty 
+              ? '${word.japanese} (${word.reading})' 
+              : word.japanese;
+
+          StyleInformation? styleInformation = const BigTextStyleInformation('');
+          if (word.imageUrl != null && word.imageUrl!.isNotEmpty) {
+            try {
+              final String largeIconPath = await _downloadAndSaveFile(
+                  word.imageUrl!, 'largeIcon_${word.id}');
+              styleInformation = BigPictureStyleInformation(
+                FilePathAndroidBitmap(largeIconPath),
+                hideExpandedLargeIcon: true,
+              );
+            } catch (e) {
+              // Ignore download errors
+            }
+          }
+
+          final listLanguage = list?.language ?? 'ja-JP';
+          final payload = '$listLanguage|${word.japanese}';
+
+          final androidDetailsRandom = AndroidNotificationDetails(
+            'quizzer_random_word_channel',
+            'Random Word Notifications',
+            channelDescription: 'Shows a random word periodically',
+            importance: Importance.max,
+            priority: Priority.high,
+            styleInformation: styleInformation,
+            autoCancel: false,
+            actions: <AndroidNotificationAction>[
+              AndroidNotificationAction(
+                'play_word',
+                l10n.playWord,
+                showsUserInterface: false,
+                cancelNotification: false,
+              ),
+            ],
+          );
+          final detailsRandom = NotificationDetails(android: androidDetailsRandom);
+
+          await fln.show(
+            id: 2,
+            title: title,
+            body: word.translation,
+            notificationDetails: detailsRandom,
+            payload: payload,
+          );
+        }
+      }
+    }
 
     return Future.value(true);
   });
@@ -126,10 +248,97 @@ class NotificationService {
       guid: '217d842b-6c4c-4286-90f6-281baf1ec202',
     );
     const initSettings = InitializationSettings(android: androidInit, windows: windowsInit);
-    await fln.initialize(settings: initSettings);
+    await fln.initialize(
+      settings: initSettings,
+      onDidReceiveNotificationResponse: notificationTapForeground,
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+    );
 
     if (Platform.isAndroid || Platform.isIOS) {
       await Workmanager().initialize(callbackDispatcher);
+    }
+  }
+
+  static Future<void> testNotification(String type, DatabaseService db) async {
+    final settings = await db.getSettings();
+    final fln = FlutterLocalNotificationsPlugin();
+
+    final locale = ui.PlatformDispatcher.instance.locale;
+    final targetLocale = AppLocalizations.supportedLocales.contains(Locale(locale.languageCode))
+        ? Locale(locale.languageCode)
+        : const Locale('en');
+    final l10n = lookupAppLocalizations(targetLocale);
+
+    if (type == 'training') {
+      final words = await db.getAllWords();
+      final wordsToRepeat = words.where((w) => w.progress < 5).length;
+      if (wordsToRepeat > 0) {
+        const androidDetails = AndroidNotificationDetails('quizzer_channel', 'Quizzer Notifications', channelDescription: 'Reminders to repeat words', importance: Importance.max, priority: Priority.high);
+        await fln.show(
+          id: 0,
+          title: l10n.notificationTrainingTitle,
+          body: l10n.notificationTrainingBody(wordsToRepeat.toString()),
+          notificationDetails: const NotificationDetails(android: androidDetails),
+        );
+      }
+    } else if (type == 'streak') {
+      const androidDetailsStreak = AndroidNotificationDetails('quizzer_streak_channel', 'Quizzer Streak', channelDescription: 'Reminders to keep your streak', importance: Importance.max, priority: Priority.high);
+      await fln.show(
+        id: 1,
+        title: l10n.notificationStreakTitle,
+        body: l10n.notificationStreakBody,
+        notificationDetails: const NotificationDetails(android: androidDetailsStreak),
+      );
+    } else if (type == 'random') {
+      var words = <dynamic>[];
+      CustomList? list;
+      if (settings.randomWordNotificationListId != null) {
+        list = await db.isar.customLists.get(settings.randomWordNotificationListId!);
+        if (list != null) {
+          await list.words.load();
+          words = list.words.toList();
+        }
+      } else {
+        words = await db.getAllWords();
+      }
+      if (words.isNotEmpty) {
+        words.shuffle();
+        final word = words.first;
+        final title = word.reading != null && word.reading!.isNotEmpty ? '${word.japanese} (${word.reading})' : word.japanese;
+        StyleInformation? styleInformation = const BigTextStyleInformation('');
+        if (word.imageUrl != null && word.imageUrl!.isNotEmpty) {
+          try {
+            final String largeIconPath = await _downloadAndSaveFile(word.imageUrl!, 'largeIcon_${word.id}');
+            styleInformation = BigPictureStyleInformation(FilePathAndroidBitmap(largeIconPath), hideExpandedLargeIcon: true);
+          } catch (e) {}
+        }
+        final listLanguage = list?.language ?? 'ja-JP';
+        final payload = '$listLanguage|${word.japanese}';
+        final androidDetailsRandom = AndroidNotificationDetails(
+          'quizzer_random_word_channel',
+          'Random Word Notifications',
+          channelDescription: 'Shows a random word periodically',
+          importance: Importance.max,
+          priority: Priority.high,
+          styleInformation: styleInformation,
+          autoCancel: false,
+          actions: <AndroidNotificationAction>[
+            AndroidNotificationAction(
+              'play_word',
+              l10n.playWord,
+              showsUserInterface: false,
+              cancelNotification: false,
+            )
+          ],
+        );
+        await fln.show(
+          id: 2,
+          title: title,
+          body: word.translation,
+          notificationDetails: NotificationDetails(android: androidDetailsRandom),
+          payload: payload,
+        );
+      }
     }
   }
 
@@ -148,6 +357,23 @@ class NotificationService {
     if (!Platform.isAndroid && !Platform.isIOS) return;
     
     await Workmanager().cancelByUniqueName('quizzer_notification');
+  }
+
+  static Future<void> updateRandomWordSchedule(int intervalMinutes) async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    
+    await Workmanager().cancelByUniqueName('random_word_notification');
+    await Workmanager().registerPeriodicTask(
+      'random_word_notification',
+      'random_word_notification',
+      frequency: Duration(minutes: intervalMinutes < 15 ? 15 : intervalMinutes),
+    );
+  }
+
+  static Future<void> cancelRandomWordSchedule() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    
+    await Workmanager().cancelByUniqueName('random_word_notification');
   }
 
   static Future<void> requestPermissions() async {

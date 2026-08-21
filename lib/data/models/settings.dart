@@ -59,4 +59,8 @@ class Settings {
   bool flashcardShowReading = true;
   bool flashcardShowTranslation = true;
   bool flashcardShowImage = true;
+
+  bool randomWordNotificationEnabled = false;
+  int randomWordNotificationIntervalMinutes = 60;
+  int? randomWordNotificationListId;
 }

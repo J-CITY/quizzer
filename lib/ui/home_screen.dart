@@ -2,14 +2,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:quizzer/l10n/app_localizations.dart';
 import '../data/services/notification_service.dart';
-import '../utils/constants.dart';
 import 'settings_screen.dart';
 import 'custom_lists_tab.dart';
 import 'statistics_screen.dart';
 import 'search_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/services/database_service.dart';
-import '../data/services/profile_service.dart';
 import 'tutorial_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -39,59 +37,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.didChangeDependencies();
     if (!_isTutorialChecked) {
       _isTutorialChecked = true;
-      _checkMigrationAndTutorial();
+      _checkTutorial();
     }
   }
 
-  Future<void> _checkMigrationAndTutorial() async {
-    final db = ref.read(databaseServiceProvider);
-    
-    if (db.wasReset) {
-      final hasBackup = await ProfileService.hasAutoBackup();
-      if (hasBackup && mounted) {
-        final shouldRestore = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            title: const Text(
-              'Восстановление базы данных',
-              style: TextStyle(color: Colors.white),
-            ),
-            content: Text(
-              'Формат базы данных изменился, и она была очищена. Найдена автоматическая резервная копия. Восстановить ваши данные?',
-              style: TextStyle(color: Colors.white.withAlpha(200)),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text('Нет', style: TextStyle(color: Colors.white.withAlpha(150))),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text('Восстановить', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
-              ),
-            ],
-          ),
-        );
-
-        if (shouldRestore == true) {
-          final success = await ProfileService.restoreFromAutoBackup(db);
-          if (success && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Данные успешно восстановлены!')),
-            );
-          } else if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Ошибка при восстановлении данных')),
-            );
-          }
-        }
-      }
-      db.wasReset = false;
-    }
-
-    final settings = await db.getSettings();
+  Future<void> _checkTutorial() async {
+    final settings = await ref.read(databaseServiceProvider).getSettings();
     if (!settings.hasSeenTutorial && mounted) {
       _showTutorial();
     }
@@ -113,11 +64,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  final List<Widget> _tabs = [
-    const StatisticsScreen(),
-    const CustomListsTab(),
-    const SearchScreen(),
-  ];
+  void _selectTab(int index) => setState(() => _currentIndex = index);
 
   @override
   Widget build(BuildContext context) {
@@ -148,6 +95,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
+            tooltip: AppLocalizations.of(context)!.settingsTitle,
             onPressed: () {
               Navigator.push(
                 context,
@@ -158,7 +106,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
       extendBody: true,
-      body: _tabs[_currentIndex],
+      body: switch (_currentIndex) {
+        0 => const StatisticsScreen(),
+        1 => const CustomListsTab(),
+        _ => const SearchScreen(),
+      },
       bottomNavigationBar: Container(
         margin: const EdgeInsets.only(left: 24, right: 24, bottom: 24),
         decoration: BoxDecoration(
@@ -190,11 +142,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ).colorScheme.surface.withValues(alpha: 0.65),
                 elevation: 0,
                 currentIndex: _currentIndex,
-                onTap: (idx) {
-                  setState(() {
-                    _currentIndex = idx;
-                  });
-                },
+                onTap: _selectTab,
                 items: [
                   BottomNavigationBarItem(
                     icon: const Icon(Icons.bar_chart),

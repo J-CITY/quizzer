@@ -13,9 +13,10 @@ import '../utils/constants.dart';
 import 'widgets/acrylic_card.dart';
 import 'widgets/glow_button.dart';
 import 'widgets/progress_bar.dart';
+import 'widgets/rush_settings_sheet.dart';
+import 'widgets/word_image.dart';
 import 'edit_custom_list_screen.dart';
 import 'edit_word_screen.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 class CustomListDetailsScreen extends ConsumerStatefulWidget {
   final CustomList customList;
@@ -29,11 +30,14 @@ class CustomListDetailsScreen extends ConsumerStatefulWidget {
 
 enum _ListMode { normal, selectToAdd, selectToDelete }
 
+enum _TrainingMode { learn, review, flashcards, rush }
+
 class _CustomListDetailsScreenState
     extends ConsumerState<CustomListDetailsScreen> {
   _ListMode _mode = _ListMode.normal;
   final Set<int> _selectedWordIds = {};
   bool _isSyncing = false;
+  bool _isStartingRush = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -85,13 +89,8 @@ class _CustomListDetailsScreenState
 
   Future<void> _resetProgress() async {
     final db = ref.read(databaseServiceProvider);
-    await db.isar.writeTxn(() async {
-      for (var word in widget.customList.words) {
-        word.progress = 0;
-        await db.isar.words.put(word);
-      }
-    });
-    setState(() {});
+    await db.resetProgressForList(widget.customList);
+    if (mounted) setState(() {});
   }
 
   Future<void> _deleteSelectedWords() async {
@@ -196,6 +195,9 @@ class _CustomListDetailsScreenState
       ),
       builder: (context) {
         final primaryColor = Theme.of(context).colorScheme.primary;
+        final l10n = AppLocalizations.of(context)!;
+        final dates = MaterialLocalizations.of(context);
+        final nextReview = word.effectiveNextReviewAt;
         return SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
@@ -206,22 +208,10 @@ class _CustomListDetailsScreenState
                 if (word.imageUrl != null && word.imageUrl!.isNotEmpty) ...[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: CachedNetworkImage(
-                      imageUrl: word.imageUrl!,
+                    child: WordImage(
+                      source: word.imageUrl!,
                       width: double.infinity,
                       height: 200,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => const SizedBox(
-                        height: 200,
-                        child: Center(child: CircularProgressIndicator()),
-                      ),
-                      errorWidget: (context, url, error) => const Center(
-                        child: Icon(
-                          Icons.broken_image,
-                          size: 48,
-                          color: Colors.grey,
-                        ),
-                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -335,13 +325,22 @@ class _CustomListDetailsScreenState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  AppLocalizations.of(context)!.wordLastTrained(
+                  l10n.wordLastTrained(
                     word.lastTrained != null
-                        ? '${word.lastTrained!.day.toString().padLeft(2, '0')}.${word.lastTrained!.month.toString().padLeft(2, '0')}.${word.lastTrained!.year}'
-                        : AppLocalizations.of(context)!.never,
+                        ? dates.formatMediumDate(word.lastTrained!.toLocal())
+                        : l10n.never,
                   ),
                   style: TextStyle(fontSize: 16),
                 ),
+                if (word.isLearned) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    word.isReviewDue(DateTime.now()) || nextReview == null
+                        ? l10n.wordReviewDue
+                        : l10n.wordReviewScheduled(dates.formatMediumDate(nextReview)),
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 Row(
                   children: [
@@ -361,119 +360,145 @@ class _CustomListDetailsScreenState
     );
   }
 
-  void _startTraining() {
+  Future<void> _startTraining() async {
+    if (_isStartingRush) return;
     final words = widget.customList.words.toList();
+    final l10n = AppLocalizations.of(context)!;
     if (words.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.noWordsForTraining),
-        ),
+        SnackBar(content: Text(l10n.noWordsForTraining)),
       );
       return;
     }
 
-    final hasUnlearned = words.any((w) => w.progress < 5);
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    showModalBottomSheet(
+    final hasUnlearned = words.any((word) => !word.isLearned);
+    final today = DateTime.now();
+    final dueCount = words.where((word) => word.isReviewDue(today)).length;
+    final mode = await showModalBottomSheet<_TrainingMode>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (!hasUnlearned) ...[
-                Text(
-                  AppLocalizations.of(context)!.allWordsLearned,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+        final learnTile = ListTile(
+          leading: const Icon(Icons.school_outlined),
+          title: Text(l10n.learnBtn),
+          onTap: () => Navigator.pop(context, _TrainingMode.learn),
+        );
+        final reviewTile = ListTile(
+          leading: const Icon(Icons.repeat),
+          title: Text(l10n.reviewBtn),
+          subtitle: Text(
+            dueCount > 0
+                ? l10n.listReviewDueWords(dueCount)
+                : l10n.listReviewOptional,
+          ),
+          onTap: () => Navigator.pop(context, _TrainingMode.review),
+        );
+        return SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                  child: Text(
+                    hasUnlearned ? l10n.selectMode : l10n.allWordsLearned,
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 16),
+                if (hasUnlearned) learnTile,
+                reviewTile,
+                ListTile(
+                  leading: const Icon(Icons.style_outlined),
+                  title: Text(l10n.flashcardsMode),
+                  onTap: () => Navigator.pop(context, _TrainingMode.flashcards),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.bolt),
+                  title: Text(l10n.rushMode),
+                  subtitle: Text(l10n.rushModeDescription),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.pop(context, _TrainingMode.rush),
+                ),
               ],
-              GlowButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => TrainingScreen(
-                        customListId: widget.customList.id,
-                        isReviewMode: false,
-                      ),
-                    ),
-                  );
-                },
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.school),
-                    const SizedBox(width: 8),
-                    Text(
-                      hasUnlearned
-                          ? AppLocalizations.of(context)!.learnBtn
-                          : AppLocalizations.of(context)!.reviewBtn,
-                      style: const TextStyle(fontSize: 18),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              GlowButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => TrainingScreen(
-                        customListId: widget.customList.id,
-                        isReviewMode: true,
-                      ),
-                    ),
-                  );
-                },
-                isPrimary: false,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.repeat),
-                    const SizedBox(width: 8),
-                    Text(
-                      AppLocalizations.of(context)!.reviewBtn,
-                      style: const TextStyle(fontSize: 18),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              GlowButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _showFlashcardsSettings();
-                },
-                isPrimary: false,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.style),
-                    const SizedBox(width: 8),
-                    Text(
-                      AppLocalizations.of(context)!.flashcardsMode,
-                      style: const TextStyle(fontSize: 18),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },
+    );
+
+    if (!mounted || mode == null) return;
+    switch (mode) {
+      case _TrainingMode.learn:
+      case _TrainingMode.review:
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => TrainingScreen(
+              customListId: widget.customList.id,
+              isReviewMode: mode == _TrainingMode.review,
+            ),
+          ),
+        );
+        if (!mounted) return;
+        await widget.customList.words.load(overrideChanges: true);
+        if (mounted) setState(() {});
+      case _TrainingMode.flashcards:
+        _showFlashcardsSettings();
+      case _TrainingMode.rush:
+        await _startRush();
+    }
+  }
+
+  Future<void> _startRush() async {
+    final db = ref.read(databaseServiceProvider);
+    final list = widget.customList;
+    _isStartingRush = true;
+    try {
+      final settings = await db.getSettings();
+      if (!mounted) return;
+      final configuration = await showRushSettingsSheet(
+        context,
+        initialErrorLimit: list.rushErrorLimitOverride,
+        globalErrorLimit: settings.rushErrorLimit,
+      );
+      if (!mounted || configuration == null) return;
+
+      if (configuration.override != list.rushErrorLimitOverride) {
+        final saved = await db.saveRushErrorLimitOverride(
+          list.id,
+          configuration.override,
+        );
+        if (!saved) {
+          _showRushStartError();
+          return;
+        }
+        list.rushErrorLimitOverride = configuration.override;
+      }
+
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => TrainingScreen(
+            customListId: list.id,
+            rushErrorLimit: configuration.errorLimit,
+          ),
+        ),
+      );
+    } catch (_) {
+      _showRushStartError();
+    } finally {
+      _isStartingRush = false;
+    }
+  }
+
+  void _showRushStartError() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(AppLocalizations.of(context)!.rushStartError)),
     );
   }
 
@@ -485,6 +510,7 @@ class _CustomListDetailsScreenState
     bool showReading = settings.flashcardShowReading;
     bool showTranslation = settings.flashcardShowTranslation;
     bool showImage = settings.flashcardShowImage;
+    bool shuffleCards = widget.customList.flashcardShuffleCards;
 
     if (!mounted) return;
 
@@ -539,6 +565,11 @@ class _CustomListDetailsScreenState
                     value: showImage,
                     onChanged: (val) => setModalState(() => showImage = val ?? true),
                   ),
+                  SwitchListTile(
+                    title: Text(AppLocalizations.of(context)!.shuffleCards),
+                    value: shuffleCards,
+                    onChanged: (val) => setModalState(() => shuffleCards = val),
+                  ),
                   const SizedBox(height: 24),
                   GlowButton(
                     onPressed: () async {
@@ -547,6 +578,9 @@ class _CustomListDetailsScreenState
                       settings.flashcardShowTranslation = showTranslation;
                       settings.flashcardShowImage = showImage;
                       await db.saveSettings(settings);
+
+                      widget.customList.flashcardShuffleCards = shuffleCards;
+                      await db.saveCustomList(widget.customList);
 
                       if (mounted) {
                         Navigator.pop(context);
@@ -743,6 +777,7 @@ class _CustomListDetailsScreenState
                   return Scrollbar(
                     interactive: true,
                     child: ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 88),
                       itemCount: filteredWords.length,
                     itemBuilder: (context, index) {
                       final word = filteredWords[index];
@@ -870,6 +905,7 @@ class _CustomListDetailsScreenState
                   return Scrollbar(
                     interactive: true,
                     child: ReorderableListView.builder(
+                      padding: const EdgeInsets.only(bottom: 88),
                       itemCount: filteredWords.length,
                     onReorder: (oldIndex, newIndex) async {
                       if (newIndex > oldIndex) newIndex -= 1;
@@ -969,15 +1005,11 @@ class _CustomListDetailsScreenState
           ],
         ),
         floatingActionButton: _mode == _ListMode.normal
-            ? SizedBox(
-                width: 64,
-                height: 64,
-                child: GlowButton(
-                  padding: EdgeInsets.zero,
-                  borderRadius: 100,
-                  onPressed: _startTraining,
-                  child: const Icon(Icons.play_arrow, size: 32),
-                ),
+            ? FloatingActionButton(
+                tooltip: AppLocalizations.of(context)!.trainingMode,
+                shape: const CircleBorder(),
+                onPressed: _startTraining,
+                child: const Icon(Icons.play_arrow, size: 32),
               )
             : SizedBox(
                 height: 56,

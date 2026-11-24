@@ -7,16 +7,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:auto_size_text/auto_size_text.dart';
-import 'package:isar/isar.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../data/models/word.dart';
 import '../data/models/word_progress_change.dart';
 import '../data/models/custom_list.dart';
+import '../data/models/rush_session.dart';
+import '../data/models/settings.dart';
 import '../domain/training_engine.dart';
 import '../data/services/database_service.dart';
 import 'training_result_screen.dart';
+import 'rush_result_screen.dart';
 import '../utils/constants.dart';
 import 'widgets/glow_button.dart';
+import 'widgets/training_skill_breakdown.dart';
+import 'widgets/word_image.dart';
 
 final ttsProvider = Provider<FlutterTts>((ref) {
   final tts = FlutterTts();
@@ -28,12 +31,41 @@ final ttsProvider = Provider<FlutterTts>((ref) {
 class TrainingScreen extends ConsumerStatefulWidget {
   final int? customListId;
   final bool isReviewMode;
+  final List<int>? reviewWordIds;
+  final PracticeSkill? reviewSkill;
+  final bool updateReviewSchedule;
+  final int? rushErrorLimit;
 
   const TrainingScreen({
     super.key,
     this.customListId,
     this.isReviewMode = false,
-  });
+    this.reviewWordIds,
+    this.reviewSkill,
+    this.updateReviewSchedule = true,
+    this.rushErrorLimit,
+  }) : assert(
+         rushErrorLimit == null || (customListId != null && !isReviewMode),
+       ),
+       assert(reviewWordIds == null || isReviewMode),
+       assert(
+         reviewSkill == null ||
+             (reviewWordIds != null && !updateReviewSchedule),
+       );
+
+  const TrainingScreen.practice({
+    Key? key,
+    int? customListId,
+    required List<int> wordIds,
+    PracticeSkill? skill,
+  }) : this(
+         key: key,
+         customListId: customListId,
+         isReviewMode: true,
+         reviewWordIds: wordIds,
+         reviewSkill: skill,
+         updateReviewSchedule: false,
+       );
 
   @override
   ConsumerState<TrainingScreen> createState() => _TrainingScreenState();
@@ -41,12 +73,16 @@ class TrainingScreen extends ConsumerStatefulWidget {
 
 class _TrainingScreenState extends ConsumerState<TrainingScreen>
     with TickerProviderStateMixin {
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  AudioPlayer? _audioPlayer;
   List<Question> _questions = [];
+  Iterator<Question>? _rushQuestions;
   int _currentIndex = 0;
   int _initialQuestionsCount = 0;
-  final Set<int> _wrongWordIds = {};
-  final Set<int> _correctFirstTryWordIds = {};
+  final Set<int> _hintedQuestions = {};
+  final Set<int> _wrongQuestions = {};
+  final Set<int> _scheduledReviewIds = {};
+  final Set<int> _wordsWithUnavailableImage = {};
+  Question? _imageReplacement;
 
   final TextEditingController _textController = TextEditingController();
   final List<int> _selectedCharIndices = [];
@@ -54,6 +90,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
 
   final Map<int, String> _userAnswers = {};
 
+  late final Settings _settings;
   List<Word> _allWords = [];
   CustomList? _customList;
   int _currentTrainingStreak = 0;
@@ -62,11 +99,22 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
   late final AnimationController _pulseController;
 
   bool _isLoading = true;
+  bool _isFinishing = false;
+  bool _confirmingExit = false;
+
+  bool get _isRush => widget.rushErrorLimit != null;
+  bool get _rushErrorLimitReached =>
+      _isRush &&
+      widget.rushErrorLimit! > 0 &&
+      _wrongQuestions.length >= widget.rushErrorLimit!;
+  bool get _isLastRushQuestion =>
+      _isRush &&
+      (_rushErrorLimitReached || _currentIndex + 1 == _initialQuestionsCount);
 
   @override
   void dispose() {
     _pulseController.dispose();
-    _audioPlayer.dispose();
+    _audioPlayer?.dispose();
     _textController.dispose();
     super.dispose();
   }
@@ -83,96 +131,111 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
 
   Future<void> _initSession() async {
     final db = ref.read(databaseServiceProvider);
-    final settings = await db.getSettings();
     final engine = ref.read(trainingEngineProvider);
+    _settings = await db.getSettings();
 
     List<Word> sourceWords;
     String listLanguage = 'ja-JP';
 
     if (widget.customListId != null) {
       final lists = await db.getCustomLists();
-      final list = lists.firstWhere((l) => l.id == widget.customListId);
+      final list = lists
+          .where((list) => list.id == widget.customListId)
+          .firstOrNull;
+      if (list == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
       _customList = list;
       listLanguage = list.language;
+      await list.words.load();
+      _allWords = list.words.toList();
 
-      if (!widget.isReviewMode) {
-        final queueSize = (list.useCustomTrainingSettings && list.learningQueueSize > 0)
+      if (!widget.isReviewMode && !_isRush) {
+        final queueSize =
+            (list.useCustomTrainingSettings && list.learningQueueSize > 0)
             ? list.learningQueueSize
-            : settings.learningQueueSize;
+            : _settings.learningQueueSize;
         await db.updateLearningQueue(list, queueSize);
         await list.learningQueue.load();
         sourceWords = list.learningQueue.toList();
 
-        // If queue is completely empty (meaning no unlearned words left at all),
-        // fallback to all words just in case, though usually handled by UI.
         if (sourceWords.isEmpty) {
-          list.words.loadSync();
-          sourceWords = list.words.toList();
+          sourceWords = _allWords;
         }
       } else {
-        list.words.loadSync();
-        sourceWords = list.words.toList();
+        sourceWords = _allWords;
       }
     } else {
-      sourceWords = await db.getAllWords();
-    }
-
-    await ref.read(ttsProvider).setLanguage(listLanguage);
-
-    if (sourceWords.isEmpty) {
-      if (mounted) Navigator.pop(context);
-      return;
-    }
-
-    if (widget.customListId != null) {
-      await _customList!.words.load();
-      _allWords = _customList!.words.toList();
-    } else {
       _allWords = await db.getAllWords();
+      sourceWords = _allWords;
     }
 
-    _questions = engine.generateSession(
-      sourceWords,
-      _allWords,
-      settings,
-      AppLocalizations.of(context)!,
-      isReviewMode: widget.isReviewMode,
-      customList: widget.customListId != null
-          ? (await db.getCustomLists()).firstWhere(
-              (l) => l.id == widget.customListId,
-            )
-          : null,
-    );
-    _initialQuestionsCount = _questions.length;
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      _playVoiceOnAppearIfNeeded();
+    if (!mounted) return;
+    if (!_isRush) {
+      await ref.read(ttsProvider).setLanguage(listLanguage);
     }
+    if (!mounted) return;
+
+    final l10n = AppLocalizations.of(context)!;
+    if (_isRush) {
+      _initialQuestionsCount = sourceWords.length;
+      final questions = engine
+          .generateRushSession(
+            sourceWords,
+            _settings,
+            l10n,
+            customList: _customList,
+          )
+          .iterator;
+      _rushQuestions = questions;
+      if (questions.moveNext()) _questions = [questions.current];
+    } else {
+      final now = DateTime.now();
+      _questions = engine.generateSession(
+        sourceWords,
+        _allWords,
+        _settings,
+        l10n,
+        isReviewMode: widget.isReviewMode,
+        customList: _customList,
+        reviewWordIds: widget.reviewWordIds,
+        reviewSkill: widget.reviewSkill,
+        now: now,
+      );
+      _initialQuestionsCount = _questions.length;
+      if (widget.isReviewMode && widget.updateReviewSchedule) {
+        _scheduledReviewIds.addAll(
+          _questions
+              .where((question) => question.word.isReviewDue(now))
+              .map((question) => question.word.id),
+        );
+      }
+    }
+
+    setState(() => _isLoading = false);
+    _playVoiceOnAppearIfNeeded();
   }
 
-  Future<void> _playVoiceOnAppearIfNeeded() async {
+  void _playVoiceOnAppearIfNeeded() {
     if (_questions.isEmpty || _currentIndex >= _questions.length) return;
     final q = _questions[_currentIndex];
     final bool hasAnswered = _userAnswers.containsKey(_currentIndex);
 
-    final settings = await ref.read(databaseServiceProvider).getSettings();
-    if (settings.autoPlayVoice ||
-        q.type == QuestionType.voiceToTrans ||
-        q.type == QuestionType.voiceToJap) {
-      // Do not play if the prompt is translation (types 3, 6, 7) or image (type 10) AND not answered
-      if (!hasAnswered &&
-          (q.type == QuestionType.transToJap ||
-              q.type == QuestionType.transToJapInput ||
-              q.type == QuestionType.transToJapConstructor ||
-              q.type == QuestionType.imageToJap ||
-              q.type == QuestionType.japToReading)) {
-        return;
-      }
-
+    if (q.isVoice ||
+        (_settings.autoPlayVoice &&
+            (hasAnswered || (!_isRush && _canPlaySupplementaryVoice(q))))) {
       _playVoice();
     }
   }
+
+  bool _canPlaySupplementaryVoice(Question question) =>
+      !question.isVoice &&
+      question.type != QuestionType.transToJap &&
+      question.type != QuestionType.transToJapInput &&
+      question.type != QuestionType.transToJapConstructor &&
+      question.type != QuestionType.imageToJap &&
+      question.type != QuestionType.japToReading;
 
   Future<void> _playVoice() async {
     if (_questions.isEmpty || _currentIndex >= _questions.length) return;
@@ -182,297 +245,351 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
         ? q.word.reading!
         : q.word.japanese;
 
-    if (!Platform.isWindows) {
-      await ref.read(ttsProvider).stop();
+    try {
+      final tts = ref.read(ttsProvider);
+      if (!Platform.isWindows) {
+        await tts.stop();
+      }
+      await Future.delayed(const Duration(milliseconds: 150));
+      if (mounted && !_isFinishing && _questions[_currentIndex] == q) {
+        await tts.speak(textToSpeak);
+      }
+    } on Exception catch (error) {
+      debugPrint('Unable to play the answer: $error');
     }
-    await ref.read(ttsProvider).speak(textToSpeak);
   }
 
-  void _onOptionSelected(String option) async {
-    if (_userAnswers.containsKey(_currentIndex)) return; // Already answered
+  Future<void> _onOptionSelected(String option) async {
+    if (_isFinishing || _userAnswers.containsKey(_currentIndex)) return;
 
-    final int answeredIndex = _currentIndex;
+    final answeredIndex = _currentIndex;
+    final question = _questions[answeredIndex];
+    final isCorrect = question.acceptsAnswer(option);
 
     setState(() {
-      _userAnswers[_currentIndex] = option;
+      _userAnswers[answeredIndex] = option;
+      if (!isCorrect) {
+        _wrongQuestions.add(answeredIndex);
+        if (!_isRush &&
+            !widget.isReviewMode &&
+            answeredIndex < _initialQuestionsCount) {
+          // One practice retry for each missed scored question.
+          _questions.add(
+            ref
+                .read(trainingEngineProvider)
+                .regenerateQuestionOptions(
+                  question,
+                  _allWords,
+                  _settings,
+                  AppLocalizations.of(context)!,
+                  _customList,
+                ),
+          );
+        }
+      }
+      if (!_isRush) {
+        _updateAnswerStreak(
+          isCorrect && !_hintedQuestions.contains(answeredIndex),
+        );
+      }
     });
 
-    final q = _questions[_currentIndex];
-    final wordId = q.word.id;
-    final settings = await ref.read(databaseServiceProvider).getSettings();
-
-    bool isCorrect = option.trim() == q.correctAnswer.trim();
-    if (q.type == QuestionType.transToJapInput ||
-        q.type == QuestionType.voiceToJapInput) {
-      isCorrect =
-          (option.trim() == q.word.japanese.trim()) ||
-          (q.word.reading != null && option.trim() == q.word.reading!.trim());
-    } else if (q.type == QuestionType.japToReading &&
-        q.correctAnswer.contains('/')) {
-      final selectedSet = option.split('/').map((e) => e.trim()).toSet();
-      final correctSet = q.correctAnswer
-          .split('/')
-          .map((e) => e.trim())
-          .toSet();
-      isCorrect =
-          selectedSet.length == correctSet.length &&
-          selectedSet.containsAll(correctSet);
-    }
-
-    if (settings.playSoundEffects) {
-      await _audioPlayer.stop();
-      if (isCorrect) {
-        await _audioPlayer.play(AssetSource('sounds/true.mp3'));
-      } else {
-        await _audioPlayer.play(AssetSource('sounds/false.mp3'));
-      }
-    }
-
-    if (isCorrect) {
-      if (!_wrongWordIds.contains(wordId)) {
-        _correctFirstTryWordIds.add(wordId);
-      }
-      _currentTrainingStreak++;
-      if (_currentTrainingStreak == _streakThreshold) {
-        _pulseController
-            .forward(from: 0.0)
-            .then((_) => _pulseController.reverse());
-        if (settings.hapticFeedbackEnabled) {
-          HapticFeedback.mediumImpact();
-          Future.delayed(const Duration(milliseconds: 150), () {
-            HapticFeedback.heavyImpact();
-          });
-        }
-      } else if (_currentTrainingStreak > _streakThreshold) {
-        _pulseController
-            .forward(from: 0.0)
-            .then((_) => _pulseController.reverse());
-        if (settings.hapticFeedbackEnabled) {
-          HapticFeedback.lightImpact();
-        }
-      }
-    } else {
-      _wrongWordIds.add(wordId);
-      if (_currentTrainingStreak >= _streakThreshold) {
-        _pulseController.stop();
-        _pulseController.value = 0;
-        if (settings.hapticFeedbackEnabled) {
-          HapticFeedback.heavyImpact();
-          Future.delayed(const Duration(milliseconds: 150), () {
-            HapticFeedback.heavyImpact();
-          });
-        }
-      }
-      _currentTrainingStreak = 0;
-      if (!widget.isReviewMode) {
-        // Regenerate question with new wrong options and append to the end
-        final engine = ref.read(trainingEngineProvider);
-        final newQ = engine.regenerateQuestionOptions(
-          q,
-          _allWords,
-          settings,
-          AppLocalizations.of(context)!,
-          _customList,
+    if (_settings.playSoundEffects) {
+      try {
+        final player = _audioPlayer ??= AudioPlayer();
+        await player.stop();
+        await player.play(
+          AssetSource(isCorrect ? 'sounds/true.mp3' : 'sounds/false.mp3'),
         );
-        _questions.add(newQ);
+      } on Exception catch (error) {
+        debugPrint('Unable to play answer feedback: $error');
       }
     }
 
-    if (settings.autoPlayVoice) {
-      if (settings.playSoundEffects) {
+    final shouldPlayVoice = !_isRush && _settings.autoPlayVoice;
+    if (shouldPlayVoice) {
+      if (_settings.playSoundEffects) {
         await Future.delayed(const Duration(milliseconds: 500));
       }
+      if (!mounted || _currentIndex != answeredIndex || _isFinishing) return;
       await _playVoice();
-      if (settings.autoAdvanceToNextQuestion) {
-        await Future.delayed(AppConstants.audioAdvanceDelay);
-        if (mounted && _currentIndex == answeredIndex) {
-          _goForward();
-        }
+    }
+    if (!_settings.autoAdvanceToNextQuestion) return;
+    await Future.delayed(
+      shouldPlayVoice
+          ? AppConstants.audioAdvanceDelay
+          : const Duration(seconds: 1),
+    );
+    if (mounted && _currentIndex == answeredIndex && !_confirmingExit) {
+      _goForward();
+    }
+  }
+
+  void _updateAnswerStreak(bool recalledUnaided) {
+    if (!recalledUnaided) {
+      if (_currentTrainingStreak >= _streakThreshold) {
+        _pulseController.reset();
+        if (_settings.hapticFeedbackEnabled) HapticFeedback.heavyImpact();
       }
-    } else {
-      if (settings.autoAdvanceToNextQuestion) {
-        await Future.delayed(const Duration(seconds: 1));
-        if (mounted && _currentIndex == answeredIndex) {
-          _goForward();
-        }
+      _currentTrainingStreak = 0;
+      return;
+    }
+
+    _currentTrainingStreak++;
+    if (_currentTrainingStreak < _streakThreshold) return;
+    _pulseController.forward(from: 0).then((_) {
+      if (mounted) _pulseController.reverse();
+    });
+    if (_settings.hapticFeedbackEnabled) {
+      if (_currentTrainingStreak == _streakThreshold) {
+        HapticFeedback.mediumImpact();
+      } else {
+        HapticFeedback.lightImpact();
       }
     }
   }
 
   void _goForward() {
-    _textController.clear();
-    _selectedCharIndices.clear();
-    _selectedMultiIndices.clear();
-    if (_currentIndex < _questions.length - 1) {
-      setState(() {
-        _currentIndex++;
-      });
-      _playVoiceOnAppearIfNeeded();
-    } else {
-      _finishTraining();
+    if (_isFinishing || !_userAnswers.containsKey(_currentIndex)) return;
+
+    if (_isRush && !_isLastRushQuestion && _rushQuestions!.moveNext()) {
+      _questions.add(_rushQuestions!.current);
     }
+
+    if (_isLastRushQuestion || _currentIndex + 1 == _questions.length) {
+      _finishTraining();
+      return;
+    }
+
+    _clearAnswerControls();
+    setState(() => _currentIndex++);
+    _playVoiceOnAppearIfNeeded();
   }
 
   void _goBack() {
+    if (_isRush || _isFinishing || _currentIndex == 0) return;
+    _clearAnswerControls();
+    setState(() => _currentIndex--);
+    _playVoiceOnAppearIfNeeded();
+  }
+
+  void _clearAnswerControls() {
     _textController.clear();
     _selectedCharIndices.clear();
     _selectedMultiIndices.clear();
-    if (_currentIndex > 0) {
-      setState(() {
-        _currentIndex--;
-      });
-      _playVoiceOnAppearIfNeeded();
-    }
   }
 
   Future<void> _finishTraining() async {
-    final db = ref.read(databaseServiceProvider);
-
-    final allWords = await db.getAllWords();
-    final wordsMap = {for (var w in allWords) w.id: w};
-
-    final mistakesList = <Word>[];
-    final progressChanges = <WordProgressChange>[];
-
-    int learnedCount = 0;
-    int inProgressCount = 0;
-
-    // Считаем общее число вопросов и число правильных ответов с первой попытки для каждого слова
-    final Map<int, int> wordTotalQuestions = {};
-    final Map<int, int> wordCorrectAnswers = {};
-
-    for (int i = 0; i < _initialQuestionsCount; i++) {
-      if (i >= _questions.length) break;
-      final q = _questions[i];
-      final wordId = q.word.id;
-
-      wordTotalQuestions[wordId] = (wordTotalQuestions[wordId] ?? 0) + 1;
-
-      final userAnswer = _userAnswers[i];
-      if (userAnswer != null) {
-        bool isCorrect = userAnswer.trim() == q.correctAnswer.trim();
-        if (q.type == QuestionType.transToJapInput ||
-            q.type == QuestionType.voiceToJapInput) {
-          isCorrect =
-              (userAnswer.trim() == q.word.japanese.trim()) ||
-              (q.word.reading != null &&
-                  userAnswer.trim() == q.word.reading!.trim());
-        } else if (q.type == QuestionType.japToReading &&
-            q.correctAnswer.contains('/')) {
-          final selectedSet = userAnswer
-              .split('/')
-              .map((e) => e.trim())
-              .toSet();
-          final correctSet = q.correctAnswer
-              .split('/')
-              .map((e) => e.trim())
-              .toSet();
-          isCorrect =
-              selectedSet.length == correctSet.length &&
-              selectedSet.containsAll(correctSet);
-        }
-
-        if (isCorrect) {
-          wordCorrectAnswers[wordId] = (wordCorrectAnswers[wordId] ?? 0) + 1;
-        }
+    if (_isFinishing) return;
+    setState(() => _isFinishing = true);
+    try {
+      if (_isRush) {
+        await _finishRush();
+      } else {
+        await _finishStudyOrReview();
       }
-    }
-
-    if (!widget.isReviewMode) {
-      for (var wordId in wordTotalQuestions.keys) {
-        final w = wordsMap[wordId];
-        if (w == null) continue;
-
-        final oldProgress = w.progress;
-        int newProgress = oldProgress;
-
-        final total = wordTotalQuestions[wordId] ?? 0;
-        final correct = wordCorrectAnswers[wordId] ?? 0;
-
-        if (correct == total) {
-          // 100% правильных ответов с первой попытки -> прогресс +1
-          if (w.progress < 5) {
-            newProgress = w.progress + 1;
-            await db.updateWordProgress(w, newProgress);
-          }
-          if (newProgress >= 5) {
-            learnedCount++;
-          } else {
-            inProgressCount++;
-          }
-          progressChanges.add(WordProgressChange(word: w, oldProgress: oldProgress, newProgress: newProgress));
-        } else {
-          // Были ошибки -> слово идет в список ошибок для отображения в результатах
-          mistakesList.add(w);
-
-          if (correct < (total / 2.0)) {
-            // Менее 50% правильных ответов -> прогресс -1
-            newProgress = (w.progress > 0) ? w.progress - 1 : 0;
-            await db.updateWordProgress(w, newProgress);
-          } else {
-            // От 50% до 99% правильных ответов -> прогресс не меняется
-            if (newProgress >= 5) {
-              learnedCount++;
-            } else {
-              inProgressCount++;
-            }
-          }
-          progressChanges.add(WordProgressChange(word: w, oldProgress: oldProgress, newProgress: newProgress));
-        }
-      }
-    } else {
-      // Режим повторения: прогресс в БД не меняется, только считаем статистику и ошибки
-      for (var wordId in wordTotalQuestions.keys) {
-        final w = wordsMap[wordId];
-        if (w == null) continue;
-
-        final total = wordTotalQuestions[wordId] ?? 0;
-        final correct = wordCorrectAnswers[wordId] ?? 0;
-        
-        progressChanges.add(WordProgressChange(word: w, oldProgress: w.progress, newProgress: w.progress));
-
-        if (correct == total) {
-          if (w.progress >= 5) {
-            learnedCount++;
-          } else {
-            inProgressCount++;
-          }
-        } else {
-          mistakesList.add(w);
-          if (w.progress >= 5) {
-            learnedCount++;
-          } else {
-            inProgressCount++;
-          }
-        }
-      }
-    }
-
-    await db.saveTrainingSession(widget.customListId);
-
-    final settings = await db.getSettings();
-    if (_wrongWordIds.isEmpty && _questions.isNotEmpty) {
-      if (settings.hapticFeedbackEnabled) {
-        HapticFeedback.mediumImpact();
-        Future.delayed(const Duration(milliseconds: 150), () {
-          HapticFeedback.heavyImpact();
-        });
-      }
-    }
-
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => TrainingResultScreen(
-            mistakes: mistakesList,
-            progressChanges: progressChanges,
-            learnedCount: learnedCount,
-            inProgressCount: inProgressCount,
-          ),
+    } on Exception catch (error) {
+      debugPrint('Unable to save the training session: $error');
+      if (!mounted) return;
+      setState(() => _isFinishing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.trainingSaveFailed),
         ),
       );
     }
+  }
+
+  Future<void> _finishRush() async {
+    final skills = summarizePracticeSkills(_firstAttemptsByWord());
+    final result = RushSession()
+      ..date = DateTime.now()
+      ..customListId = widget.customListId
+      ..correctAnswers = _userAnswers.length - _wrongQuestions.length
+      ..answeredQuestions = _userAnswers.length
+      ..totalWords = _initialQuestionsCount
+      ..errorLimit = widget.rushErrorLimit!;
+    await ref.read(databaseServiceProvider).saveRushSession(result);
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => RushResultScreen(
+          result: result,
+          listName: _customList!.name,
+          skills: skills,
+          missedWords: [
+            for (final index in _wrongQuestions) _questions[index].word,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Map<int, List<PracticeAttempt>> _firstAttemptsByWord() {
+    final attempts = <int, List<PracticeAttempt>>{};
+    for (
+      var index = 0;
+      index < _questions.length && index < _initialQuestionsCount;
+      index++
+    ) {
+      if (!_userAnswers.containsKey(index)) continue;
+      final question = _questions[index];
+      final answer = _wrongQuestions.contains(index)
+          ? PracticeAnswer.incorrect
+          : _hintedQuestions.contains(index)
+          ? PracticeAnswer.assisted
+          : PracticeAnswer.independent;
+      attempts.putIfAbsent(question.word.id, () => []).add((
+        questionType: question.type,
+        answer: answer,
+      ));
+    }
+    return attempts;
+  }
+
+  Future<void> _finishStudyOrReview() async {
+    final db = ref.read(databaseServiceProvider);
+    final allWords = await db.getAllWords();
+    final wordsMap = {for (final word in allWords) word.id: word};
+    final mistakes = <Word>[];
+    final progressChanges = <WordProgressChange>[];
+    final attemptsByWord = _firstAttemptsByWord();
+    final independentlyRecalledReviewIds = <int>{};
+
+    for (final entry in attemptsByWord.entries) {
+      if (_scheduledReviewIds.contains(entry.key) &&
+          entry.value.any(
+            (attempt) => attempt.answer == PracticeAnswer.independent,
+          )) {
+        independentlyRecalledReviewIds.add(entry.key);
+      }
+      final word = wordsMap[entry.key];
+      if (word == null) continue;
+
+      if (entry.value.any(
+        (attempt) => attempt.answer == PracticeAnswer.incorrect,
+      )) {
+        mistakes.add(word);
+      }
+      if (widget.isReviewMode) continue;
+
+      final oldProgress = word.progress;
+      final newProgress = learningProgressAfterSession(
+        oldProgress,
+        entry.value,
+      );
+      progressChanges.add(
+        WordProgressChange(
+          word: word,
+          oldProgress: oldProgress,
+          newProgress: newProgress,
+        ),
+      );
+    }
+
+    final advancedReviewCount = await db.saveTrainingSession(
+      widget.customListId,
+      progressChanges: progressChanges,
+      independentlyRecalledReviewIds: independentlyRecalledReviewIds,
+    );
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => TrainingResultScreen(
+          customListId: widget.customListId,
+          mistakes: mistakes,
+          progressChanges: progressChanges,
+          skills: summarizePracticeSkills(attemptsByWord),
+          isReviewMode: widget.isReviewMode,
+          scheduledReviewCount: _scheduledReviewIds.length,
+          advancedReviewCount: advancedReviewCount,
+        ),
+      ),
+    );
+  }
+
+  void _handleUnavailableImage(Question question) {
+    if (!mounted || _questions[_currentIndex] != question) return;
+    final alreadyAnswered = _userAnswers.containsKey(_currentIndex);
+    final canReplace =
+        question.type == QuestionType.imageToJap && !alreadyAnswered;
+    if (!canReplace) return;
+
+    final l10n = AppLocalizations.of(context)!;
+    final replacement = ref
+        .read(trainingEngineProvider)
+        .replaceUnavailableImageQuestion(
+          question,
+          _allWords,
+          _settings,
+          l10n,
+          _customList,
+        );
+    _clearAnswerControls();
+    setState(() {
+      _wordsWithUnavailableImage.add(question.word.id);
+      _questions[_currentIndex] = replacement;
+      _imageReplacement = replacement;
+    });
+    _playVoiceOnAppearIfNeeded();
+  }
+
+  Future<void> _showHint(Question question, QuestionHint hint) async {
+    if (_userAnswers.containsKey(_currentIndex)) return;
+    setState(() {
+      _hintedQuestions.add(_currentIndex);
+      if (hint.kind == QuestionHintKind.hideOption) {
+        _selectedMultiIndices.remove(question.options.indexOf(hint.value));
+      }
+    });
+
+    final l10n = AppLocalizations.of(context)!;
+    final message = switch (hint.kind) {
+      QuestionHintKind.mnemonic => hint.value,
+      QuestionHintKind.firstCharacter => l10n.trainingHintFirstCharacter(
+        hint.value,
+      ),
+      QuestionHintKind.hideOption => l10n.trainingHintOptionRemoved,
+    };
+    final effect = !widget.isReviewMode
+        ? l10n.trainingHintLearningEffect
+        : _scheduledReviewIds.contains(question.word.id)
+        ? l10n.trainingHintReviewEffect
+        : null;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.lightbulb_outline),
+        title: Text(l10n.trainingHint),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(message),
+            if (effect != null) ...[
+              const SizedBox(height: 12),
+              Text(effect, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ],
+        ),
+        scrollable: true,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.close),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String? _hiddenOption(Question question) {
+    if (!_hintedQuestions.contains(_currentIndex)) return null;
+    final hint = question.hint;
+    return hint?.kind == QuestionHintKind.hideOption ? hint!.value : null;
   }
 
   @override
@@ -490,14 +607,36 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
       );
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final q = _questions[_currentIndex];
-    final progressText = '${_currentIndex + 1} / ${_questions.length}';
+    final isRetry = _currentIndex >= _initialQuestionsCount;
+    final progressText = isRetry
+        ? l10n.trainingRetryProgress(
+            _currentIndex - _initialQuestionsCount + 1,
+            _questions.length - _initialQuestionsCount,
+          )
+        : '${_currentIndex + 1} / $_initialQuestionsCount';
     final hasAnswered = _userAnswers.containsKey(_currentIndex);
     final selectedOption = _userAnswers[_currentIndex];
+    final hintUsed = _hintedQuestions.contains(_currentIndex);
+    final hintsDisabled = widget.isReviewMode
+        ? _settings.reviewHintsDisabled
+        : _settings.learningHintsDisabled;
+    final hint = _isRush || hasAnswered || hintsDisabled ? null : q.hint;
+    final reviewSkill = widget.reviewSkill;
+    final modeLabel = reviewSkill != null
+        ? practiceSkillLabel(l10n, reviewSkill)
+        : !widget.isReviewMode
+        ? l10n.trainingStudyMode
+        : !widget.updateReviewSchedule
+        ? l10n.trainingMistakesMode
+        : _scheduledReviewIds.isNotEmpty
+        ? l10n.trainingScheduledReviewMode
+        : l10n.trainingReviewMode;
 
     bool showTranslation = false;
     String mainText = q.prompt;
-    String? subText = q.subtitle;
+    String? subText = _isRush ? null : q.subtitle;
 
     if (hasAnswered) {
       mainText = q.word.japanese;
@@ -506,7 +645,11 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
     }
 
     bool showImage = false;
-    if (q.word.imageUrl != null && q.word.imageUrl!.isNotEmpty) {
+    if (!_isRush &&
+        q.word.imageUrl != null &&
+        q.word.imageUrl!.isNotEmpty &&
+        (q.type == QuestionType.imageToJap ||
+            !_wordsWithUnavailableImage.contains(q.word.id))) {
       if (hasAnswered) {
         showImage = true;
       } else if (q.type == QuestionType.imageToJap) {
@@ -522,12 +665,14 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
 
     final primaryColor = Theme.of(context).colorScheme.primary;
     final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    final extraToolbarHeight = MediaQuery.textScalerOf(context).scale(36) - 36;
 
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
+        if (didPop || _isFinishing || _confirmingExit) return;
 
+        _confirmingExit = true;
         final shouldPop = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -549,8 +694,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
           ),
         );
 
+        _confirmingExit = false;
         if (shouldPop ?? false) {
-          if (mounted) {
+          if (context.mounted) {
             Navigator.pop(context);
           }
         }
@@ -558,7 +704,48 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          title: Text(progressText),
+          toolbarHeight: _isRush
+              ? kToolbarHeight + extraToolbarHeight.clamp(0.0, 72.0)
+              : null,
+          title: _isRush
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      l10n.rushResultInProgress(progressText),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      widget.rushErrorLimit == 0
+                          ? l10n.rushResultErrors(_wrongQuestions.length)
+                          : l10n.rushResultErrorsWithLimit(
+                              _wrongQuestions.length,
+                              widget.rushErrorLimit!,
+                            ),
+                      style: Theme.of(context).textTheme.labelMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                )
+              : Text(
+                  isRetry
+                      ? progressText
+                      : l10n.trainingModeWithProgress(modeLabel, progressText),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+          actions: [
+            if (hint != null)
+              IconButton(
+                tooltip: hintUsed ? l10n.trainingHintUsed : l10n.trainingHint,
+                onPressed: () => _showHint(q, hint),
+                icon: Icon(
+                  hintUsed ? Icons.lightbulb : Icons.lightbulb_outline,
+                ),
+              ),
+          ],
           centerTitle: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -568,17 +755,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
           onHorizontalDragEnd: (details) {
             if (details.primaryVelocity == null) return;
             if (details.primaryVelocity! < -300) {
-              if (hasAnswered) {
-                if (_currentIndex < _questions.length - 1) {
-                  _goForward();
-                } else {
-                  _finishTraining();
-                }
-              }
-            } else if (details.primaryVelocity! > 300) {
-              if (_currentIndex > 0) {
-                _goBack();
-              }
+              _goForward();
+            } else if (details.primaryVelocity! > 300 && !_isRush) {
+              _goBack();
             }
           },
           child: Padding(
@@ -586,6 +765,17 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (q == _imageReplacement)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        l10n.trainingImageQuestionReplaced,
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    ),
+                  ),
                 if (!isKeyboardOpen) ...[
                   Expanded(
                     flex: 2,
@@ -698,23 +888,12 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
                                               const BorderRadius.vertical(
                                                 top: Radius.circular(20),
                                               ),
-                                          child: CachedNetworkImage(
-                                            imageUrl: q.word.imageUrl!,
+                                          child: WordImage(
+                                            key: ValueKey(q),
+                                            source: q.word.imageUrl!,
                                             fit: BoxFit.cover,
-                                            placeholder: (context, url) =>
-                                                const Center(
-                                                  child:
-                                                      CircularProgressIndicator(),
-                                                ),
-                                            errorWidget:
-                                                (context, url, error) =>
-                                                    const Center(
-                                                      child: Icon(
-                                                        Icons.broken_image,
-                                                        size: 48,
-                                                        color: Colors.grey,
-                                                      ),
-                                                    ),
+                                            onLoadError: () =>
+                                                _handleUnavailableImage(q),
                                           ),
                                         ),
                                       ),
@@ -723,47 +902,33 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
                                       child: Stack(
                                         children: [
                                           GestureDetector(
-                                            onLongPress: () {
-                                              String textToCopy =
-                                                  mainText.isNotEmpty
-                                                  ? mainText
-                                                  : q.word.japanese;
-                                              Clipboard.setData(
-                                                ClipboardData(text: textToCopy),
-                                              );
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    AppLocalizations.of(
+                                            onLongPress: mainText.isEmpty
+                                                ? null
+                                                : () {
+                                                    Clipboard.setData(
+                                                      ClipboardData(
+                                                        text: mainText,
+                                                      ),
+                                                    );
+                                                    ScaffoldMessenger.of(
                                                       context,
-                                                    )!.copiedToClipboard,
-                                                  ),
-                                                ),
-                                              );
-                                            },
+                                                    ).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          AppLocalizations.of(
+                                                            context,
+                                                          )!.copiedToClipboard,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
                                             child: Center(
                                               child: SingleChildScrollView(
                                                 child: Column(
                                                   mainAxisAlignment:
                                                       MainAxisAlignment.center,
                                                   children: [
-                                                    if ((q.type ==
-                                                                QuestionType
-                                                                    .voiceToTrans ||
-                                                            q.type ==
-                                                                QuestionType
-                                                                    .voiceToJap ||
-                                                            q.type ==
-                                                                QuestionType
-                                                                    .voiceToJapInput ||
-                                                            q.type ==
-                                                                QuestionType
-                                                                    .voiceToJapConstructor ||
-                                                            q.type ==
-                                                                QuestionType
-                                                                    .imageToJap) &&
+                                                    if (q.isVoice &&
                                                         !hasAnswered)
                                                       Column(
                                                         children: [
@@ -799,7 +964,12 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
                                                       )
                                                     else ...[
                                                       AutoSizeText(
-                                                        mainText,
+                                                        !hasAnswered &&
+                                                                q.type ==
+                                                                    QuestionType
+                                                                        .imageToJap
+                                                            ? l10n.trainingImagePrompt
+                                                            : mainText,
                                                         style: TextStyle(
                                                           fontSize: showImage
                                                               ? 32
@@ -867,34 +1037,11 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
                                               ),
                                             ),
                                           ),
-                                          // Hide small mic if:
-                                          // 1. Not answered and type is Trans->Jap (to avoid hint)
-                                          // 2. Not answered and type is Auditory (because big mic is shown)
-                                          if (!(!hasAnswered &&
-                                              (q.type ==
-                                                      QuestionType.transToJap ||
-                                                  q.type ==
-                                                      QuestionType
-                                                          .transToJapInput ||
-                                                  q.type ==
-                                                      QuestionType
-                                                          .transToJapConstructor ||
-                                                  q.type ==
-                                                      QuestionType
-                                                          .voiceToTrans ||
-                                                  q.type ==
-                                                      QuestionType.voiceToJap ||
-                                                  q.type ==
-                                                      QuestionType
-                                                          .voiceToJapInput ||
-                                                  q.type ==
-                                                      QuestionType
-                                                          .voiceToJapConstructor ||
-                                                  q.type ==
-                                                      QuestionType.imageToJap ||
-                                                  q.type ==
-                                                      QuestionType
-                                                          .japToReading)))
+                                          if (!_isRush &&
+                                              (hasAnswered ||
+                                                  _canPlaySupplementaryVoice(
+                                                    q,
+                                                  )))
                                             Positioned(
                                               top: 8,
                                               right: 8,
@@ -932,16 +1079,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
                           Center(
                             child: Padding(
                               padding: const EdgeInsets.all(8.0),
-                              child:
-                                  (!hasAnswered &&
-                                      (q.type == QuestionType.voiceToTrans ||
-                                          q.type == QuestionType.voiceToJap ||
-                                          q.type ==
-                                              QuestionType.voiceToJapInput ||
-                                          q.type ==
-                                              QuestionType
-                                                  .voiceToJapConstructor ||
-                                          q.type == QuestionType.imageToJap))
+                              child: !hasAnswered && q.isVoice
                                   ? IconButton(
                                       padding: EdgeInsets.zero,
                                       constraints: const BoxConstraints(),
@@ -964,16 +1102,8 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
                                     ),
                             ),
                           ),
-                          if (!(!hasAnswered &&
-                              (q.type == QuestionType.transToJap ||
-                                  q.type == QuestionType.transToJapInput ||
-                                  q.type ==
-                                      QuestionType.transToJapConstructor ||
-                                  q.type == QuestionType.voiceToTrans ||
-                                  q.type == QuestionType.voiceToJap ||
-                                  q.type == QuestionType.voiceToJapInput ||
-                                  q.type ==
-                                      QuestionType.voiceToJapConstructor)))
+                          if (!_isRush &&
+                              (hasAnswered || _canPlaySupplementaryVoice(q)))
                             Positioned(
                               top: 4,
                               right: 4,
@@ -997,30 +1127,42 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: GlowButton(
-                        onPressed: _currentIndex > 0 ? _goBack : null,
-                        isPrimary: false,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.arrow_back),
-                            const SizedBox(width: 8),
-                            Text(AppLocalizations.of(context)!.back),
-                          ],
+                    if (!_isRush) ...[
+                      Expanded(
+                        child: GlowButton(
+                          onPressed: _currentIndex > 0 && !_isFinishing
+                              ? _goBack
+                              : null,
+                          isPrimary: false,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.arrow_back),
+                              const SizedBox(width: 8),
+                              Text(AppLocalizations.of(context)!.back),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
+                      const SizedBox(width: 16),
+                    ],
                     Expanded(
                       child: GlowButton(
-                        onPressed: hasAnswered ? _goForward : null,
+                        onPressed: hasAnswered && !_isFinishing
+                            ? _goForward
+                            : null,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(AppLocalizations.of(context)!.forward),
+                            Flexible(
+                              child: Text(
+                                _isLastRushQuestion
+                                    ? l10n.rushResultShow
+                                    : l10n.forward,
+                              ),
+                            ),
                             const SizedBox(width: 8),
                             Icon(Icons.arrow_forward),
                           ],
@@ -1042,14 +1184,11 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
     bool hasAnswered,
     String? selectedOption,
   ) {
-    if (q.type == QuestionType.transToJapInput ||
-        q.type == QuestionType.voiceToJapInput) {
+    if (q.isTextInput) {
       return _buildTextInputArea(q, hasAnswered, selectedOption);
-    } else if (q.type == QuestionType.transToJapConstructor ||
-        q.type == QuestionType.voiceToJapConstructor) {
+    } else if (q.isConstructor) {
       return _buildConstructorArea(q, hasAnswered, selectedOption);
-    } else if (q.type == QuestionType.japToReading &&
-        q.correctAnswer.contains('/')) {
+    } else if (q.isMultiSelection) {
       return _buildMultiSelectionArea(q, hasAnswered, selectedOption);
     } else {
       return _buildMultipleChoiceArea(q, hasAnswered, selectedOption);
@@ -1220,7 +1359,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
                   : Wrap(
                       spacing: 8.0,
                       runSpacing: 8.0,
-                      children: List.generate(_selectedCharIndices.length, (index) {
+                      children: List.generate(_selectedCharIndices.length, (
+                        index,
+                      ) {
                         final charIndex = _selectedCharIndices[index];
                         final char = q.options[charIndex];
                         final chipWidget = InputChip(
@@ -1242,7 +1383,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
                             setState(() {
                               final oldIndex = details.data;
                               if (oldIndex != index) {
-                                final item = _selectedCharIndices.removeAt(oldIndex);
+                                final item = _selectedCharIndices.removeAt(
+                                  oldIndex,
+                                );
                                 _selectedCharIndices.insert(index, item);
                               }
                             });
@@ -1354,6 +1497,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
     bool hasAnswered,
     String? selectedOption,
   ) {
+    final hiddenOption = _hiddenOption(q);
     return SingleChildScrollView(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1366,6 +1510,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
             children: List.generate(q.options.length, (index) {
               final isSelected = _selectedMultiIndices.contains(index);
               final option = q.options[index];
+              if (option == hiddenOption) return const SizedBox.shrink();
               Color? buttonColor;
               Color? textColor;
 
@@ -1518,10 +1663,14 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
     bool hasAnswered,
     String? selectedOption,
   ) {
+    final hiddenOption = _hiddenOption(q);
+    final options = q.options
+        .where((option) => option != hiddenOption)
+        .toList();
     return ListView.builder(
-      itemCount: q.options.length,
+      itemCount: options.length,
       itemBuilder: (context, index) {
-        final option = q.options[index];
+        final option = options[index];
 
         Color? buttonColor;
         Color? textColor;

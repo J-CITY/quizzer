@@ -1,20 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:quizzer/l10n/app_localizations.dart';
 import '../data/models/word.dart';
 import '../data/models/custom_list.dart';
 import '../data/services/database_service.dart';
+import '../data/services/word_image_files.dart';
 import 'widgets/glow_button.dart';
+import 'widgets/word_image.dart';
 
 class EditWordScreen extends ConsumerStatefulWidget {
   final Word? word;
@@ -42,6 +38,8 @@ class _EditWordScreenState extends ConsumerState<EditWordScreen> {
   final _translationController = TextEditingController();
   final _mnemonicController = TextEditingController();
   final _imageController = TextEditingController();
+  String _localImage = '';
+  String _previewImage = '';
 
   CustomList? _selectedList;
   List<CustomList> _availableLists = [];
@@ -55,7 +53,7 @@ class _EditWordScreenState extends ConsumerState<EditWordScreen> {
       _readingController.text = widget.word!.reading ?? '';
       _translationController.text = widget.word!.translation;
       _mnemonicController.text = widget.word!.mnemonic ?? '';
-      _imageController.text = widget.word!.imageUrl ?? '';
+      _setImageSource(widget.word!.imageUrl ?? '');
     } else {
       _japaneseController.text = widget.initialJapanese ?? '';
       _translationController.text = widget.initialTranslation ?? '';
@@ -68,6 +66,7 @@ class _EditWordScreenState extends ConsumerState<EditWordScreen> {
   Future<void> _loadLists() async {
     final db = ref.read(databaseServiceProvider);
     final lists = await db.getCustomLists();
+    if (!mounted) return;
     setState(() {
       _availableLists = lists.where((l) => l.googleSheetId == null || l.googleSheetId!.isEmpty).toList();
       if (widget.initialList != null) {
@@ -92,22 +91,35 @@ class _EditWordScreenState extends ConsumerState<EditWordScreen> {
   }
 
   Future<void> _pickImageFromDevice() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      final docDir = await getApplicationDocumentsDirectory();
-      final imagesDir = Directory('${docDir.path}/images');
-      if (!await imagesDir.exists()) {
-        await imagesDir.create();
+    try {
+      final pickedFile = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
+      if (pickedFile == null || !mounted) return;
+      final source = await WordImageFiles.saveGalleryImage(File(pickedFile.path));
+      if (mounted) setState(() => _setImageSource(source));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.wordImagePickFailed)),
+        );
       }
-      final extension = pickedFile.path.split('.').last;
-      final newPath = '${imagesDir.path}/${const Uuid().v4()}.$extension';
-      await File(pickedFile.path).copy(newPath);
-      
-      setState(() {
-        _imageController.text = newPath;
-      });
     }
+  }
+
+  void _setImageSource(String source) {
+    final remote = WordImageFiles.isRemote(source);
+    _imageController.text = remote ? source : '';
+    _localImage = remote ? '' : source;
+    _previewImage = source;
+  }
+
+  String get _selectedImage {
+    final url = _imageController.text.trim();
+    return url.isEmpty ? _localImage : url;
   }
 
   Future<void> _searchImagesWeb() async {
@@ -126,10 +138,9 @@ class _EditWordScreenState extends ConsumerState<EditWordScreen> {
 
   Future<void> _pasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
-    if (data != null && data.text != null && data.text!.isNotEmpty) {
-      setState(() {
-        _imageController.text = data.text!;
-      });
+    final source = data?.text?.trim();
+    if (mounted && source != null && source.isNotEmpty) {
+      setState(() => _setImageSource(source));
     }
   }
 
@@ -148,13 +159,14 @@ class _EditWordScreenState extends ConsumerState<EditWordScreen> {
     }
 
     final db = ref.read(databaseServiceProvider);
+    final imageSource = _selectedImage;
 
     if (widget.word != null) {
       widget.word!.japanese = _japaneseController.text.trim();
       widget.word!.reading = _readingController.text.trim();
       widget.word!.translation = _translationController.text.trim();
       widget.word!.mnemonic = _mnemonicController.text.trim();
-      widget.word!.imageUrl = _imageController.text.trim();
+      widget.word!.imageUrl = imageSource.isEmpty ? null : imageSource;
       
       await db.updateWord(widget.word!);
       
@@ -168,7 +180,7 @@ class _EditWordScreenState extends ConsumerState<EditWordScreen> {
         ..reading = _readingController.text.trim()
         ..translation = _translationController.text.trim()
         ..mnemonic = _mnemonicController.text.trim()
-        ..imageUrl = _imageController.text.trim()
+        ..imageUrl = imageSource.isEmpty ? null : imageSource
         ..orderIndex = _selectedList!.words.length;
 
       await db.isar.writeTxn(() async {
@@ -314,6 +326,16 @@ class _EditWordScreenState extends ConsumerState<EditWordScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _imageController,
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => setState(() => _previewImage = _selectedImage),
+              onChanged: (value) {
+                if (value.isEmpty) {
+                  setState(() => _previewImage = _localImage);
+                } else if (_previewImage.isNotEmpty) {
+                  setState(() => _previewImage = '');
+                }
+              },
               decoration: InputDecoration(
                 labelText: AppLocalizations.of(context)!.wordImageHint,
                 border: const OutlineInputBorder(),
@@ -324,6 +346,26 @@ class _EditWordScreenState extends ConsumerState<EditWordScreen> {
                 ),
               ),
             ),
+            if (_previewImage.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: WordImage(
+                  source: _previewImage,
+                  width: double.infinity,
+                  height: 160,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _setImageSource('')),
+                  icon: const Icon(Icons.close),
+                  label: Text(AppLocalizations.of(context)!.wordImageRemove),
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:quizzer/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,14 +7,17 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:lottie/lottie.dart';
 import '../data/models/word.dart';
 import '../data/models/custom_list.dart';
+import '../data/models/settings.dart';
 import '../data/models/training_session.dart';
 import '../data/services/database_service.dart';
+import '../domain/quick_training_plan.dart';
+import '../domain/training_engine.dart';
 import '../utils/lottie_color_shift.dart';
 import 'custom_list_details_screen.dart';
+import 'settings_screen.dart';
 import 'training_screen.dart';
 import '../utils/constants.dart';
 import 'widgets/acrylic_card.dart';
-import 'dart:math';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
@@ -22,15 +26,20 @@ class StatisticsScreen extends ConsumerStatefulWidget {
   ConsumerState<StatisticsScreen> createState() => _StatisticsScreenState();
 }
 
-class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
+class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
+    with WidgetsBindingObserver {
   int _streak = 0;
   List<TrainingSession> _sessions = [];
   List<CustomList> _customLists = [];
+  Map<int, List<Word>> _listWords = {};
   List<Word> _allWords = [];
+  int _loadVersion = 0;
+  bool? _wasVisible;
+  bool _openingTraining = false;
 
   bool _isLoading = true;
   bool _showCharts = false;
-  String? _modifiedLottieJson;
+  Future<Uint8List?>? _streakAnimation;
 
   DateTime _selectedMonth = DateTime(
     DateTime.now().year,
@@ -41,14 +50,42 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadData();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isVisible = ModalRoute.isCurrentOf(context) ?? true;
+    if (_wasVisible == false && isVisible) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+    }
+    _wasVisible = isVisible;
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _loadData();
+  }
+
   Future<void> _loadData() async {
+    if (!mounted) return;
+    final loadVersion = ++_loadVersion;
     final db = ref.read(databaseServiceProvider);
     final sessions = await db.getAllTrainingSessions();
     final allWords = await db.getAllWords();
     final customLists = await db.getCustomLists();
+    await Future.wait(customLists.map((list) => list.words.load()));
+    final listWords = {
+      for (final list in customLists) list.id: list.words.toList(),
+    };
 
     // Calculate streak
     final uniqueDays = sessions.map((s) => s.date).toSet().toList();
@@ -78,19 +115,18 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       }
     }
 
-    Color targetColor = _getColorForStreak(currentStreak);
-    String lottieJson = await LottieColorShift.shiftLottieHue(
-      'assets/fier.json',
-      targetColor,
-    );
-
-    if (mounted) {
+    if (mounted && loadVersion == _loadVersion) {
       setState(() {
+        final streakColor = _getColorForStreak(currentStreak);
+        if (_streakAnimation == null ||
+            streakColor != _getColorForStreak(_streak)) {
+          _streakAnimation = _loadStreakAnimation(streakColor);
+        }
         _streak = currentStreak;
         _sessions = sessions;
         _allWords = allWords;
         _customLists = customLists;
-        _modifiedLottieJson = lottieJson;
+        _listWords = listWords;
         _isLoading = false;
       });
 
@@ -101,6 +137,19 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           });
         }
       });
+    }
+  }
+
+  Future<Uint8List?> _loadStreakAnimation(Color streakColor) async {
+    try {
+      final json = await LottieColorShift.shiftLottieHue(
+        'assets/fier.json',
+        streakColor,
+      );
+      return utf8.encode(json);
+    } catch (error) {
+      debugPrint('Could not load the streak animation: $error');
+      return null;
     }
   }
 
@@ -122,43 +171,142 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     });
   }
 
-  void _startQuickTraining() {
-    if (_customLists.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.noAvailableLists)),
+  Future<void> _startQuickTraining(QuickTrainingPlan plan) async {
+    if (_openingTraining) return;
+    setState(() => _openingTraining = true);
+    try {
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TrainingScreen(
+            customListId: plan.list.id,
+            isReviewMode: plan.mode != QuickTrainingMode.study,
+            reviewWordIds: plan.reviewWordIds,
+            updateReviewSchedule:
+                plan.mode == QuickTrainingMode.scheduledReview,
+          ),
+        ),
       );
+    } finally {
+      if (mounted) setState(() => _openingTraining = false);
+    }
+  }
+
+  Iterable<QuickTrainingPlan> _additionalReviews(
+    QuickTrainingPlan? first,
+    Settings? settings,
+  ) sync* {
+    final firstWords = first?.reviewWordIds;
+    if (first == null ||
+        settings == null ||
+        firstWords == null ||
+        first.dueWordCount <= firstWords.length) {
       return;
     }
-
-    List<CustomList> listsWithWords = [];
-    for (var list in _customLists) {
-      list.words.loadSync();
-      if (list.words.isNotEmpty) {
-        listsWithWords.add(list);
-      }
-    }
-
-    if (listsWithWords.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.noAvailableLists)),
+    final queuedWordIds = firstWords.toSet();
+    for (final entry in first.dueLists.skip(1)) {
+      final wordIds = entry.words
+          .map((word) => word.id)
+          .where((id) => !queuedWordIds.contains(id))
+          .take(TrainingEngine.sessionQuestionLimit(settings, entry.list))
+          .toList();
+      if (wordIds.isEmpty) continue;
+      queuedWordIds.addAll(wordIds);
+      yield QuickTrainingPlan(
+        list: entry.list,
+        mode: QuickTrainingMode.scheduledReview,
+        reviewWordIds: wordIds,
       );
-      return;
     }
+  }
 
-    final random = Random();
-    final list = listsWithWords[random.nextInt(listsWithWords.length)];
-    final words = list.words.toList();
-
-    final unlearned = words.where((w) => w.progress < 5).toList();
-    final isLearning = unlearned.isNotEmpty;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            TrainingScreen(customListId: list.id, isReviewMode: !isLearning),
+  Widget _buildTrainingCard({
+    required String title,
+    String? subtitle,
+    String? detail,
+    String? buttonLabel,
+    VoidCallback? onPressed,
+  }) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final secondaryText = TextStyle(
+      fontSize: 14,
+      color: theme.extension<AppColorsExtension>()!.textSecondary,
+    );
+    final text = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(subtitle, style: secondaryText),
+        ],
+        if (detail != null) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(Icons.repeat, size: 16, color: secondaryText.color),
+              const SizedBox(width: 4),
+              Expanded(child: Text(detail, style: secondaryText)),
+            ],
+          ),
+        ],
+      ],
+    );
+    final button = ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
       ),
-    ).then((_) => _loadData());
+      onPressed: onPressed,
+      child: Text(
+        buttonLabel ?? l10n.start,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+    );
+    return AcrylicCard(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              theme.colorScheme.primary.withValues(alpha: 0.2),
+              Colors.transparent,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final enlargedText =
+                MediaQuery.textScalerOf(context).scale(14) > 21;
+            if (constraints.maxWidth < 230 || enlargedText) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [text, const SizedBox(height: 12), button],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: text),
+                const SizedBox(width: 16),
+                button,
+              ],
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Widget _buildBarChart() {
@@ -267,7 +415,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
             );
           }),
         ),
-        swapAnimationDuration: const Duration(milliseconds: 400),
+        duration: const Duration(milliseconds: 400),
       ),
     );
   }
@@ -282,7 +430,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 8),
-        Text('$label: $value', style: const TextStyle(fontSize: 14)),
+        Flexible(
+          child: Text('$label: $value', style: const TextStyle(fontSize: 14)),
+        ),
       ],
     );
   }
@@ -345,7 +495,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 ),
               ],
             ),
-            swapAnimationDuration: const Duration(milliseconds: 400),
+            duration: const Duration(milliseconds: 400),
           ),
           if (allLearned)
             Icon(
@@ -437,11 +587,31 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-
     final now = DateTime.now();
+    final settingsState = ref.watch(settingsProvider);
+    final settings = settingsState.valueOrNull;
+    final plan = settings == null
+        ? null
+        : planQuickTraining(
+            [
+              for (final list in _customLists)
+                (list: list, words: _listWords[list.id] ?? const <Word>[]),
+            ],
+            settings,
+            now,
+          );
+    final practiceDetail = switch (plan?.mode) {
+      QuickTrainingMode.scheduledReview => l10n.quickTrainingDue(
+        plan!.reviewWordIds!.length,
+      ),
+      QuickTrainingMode.study => l10n.quickTrainingStudy,
+      QuickTrainingMode.freeReview => l10n.quickTrainingFreeReview,
+      null => null,
+    };
     final months = List.generate(12, (i) {
       return DateTime(now.year, now.month - i, 1);
     });
@@ -454,8 +624,14 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
     return Scaffold(
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + MediaQuery.paddingOf(context).bottom,
+        ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Lottie Fire & Streak
             AcrylicCard(
@@ -472,16 +648,29 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (_modifiedLottieJson != null)
-                            Lottie.memory(
-                              utf8.encode(_modifiedLottieJson!),
-                              repeat: false,
-                              width: 80,
-                              height: 80,
-                              fit: BoxFit.contain,
-                            )
-                          else
-                            const SizedBox(width: 80, height: 80),
+                          FutureBuilder<Uint8List?>(
+                            future: _streakAnimation,
+                            builder: (context, snapshot) {
+                              final bytes = snapshot.data;
+                              if (bytes == null) {
+                                return SizedBox.square(
+                                  dimension: 80,
+                                  child: Icon(
+                                    Icons.local_fire_department,
+                                    size: 48,
+                                    color: _getColorForStreak(_streak),
+                                  ),
+                                );
+                              }
+                              return Lottie.memory(
+                                bytes,
+                                repeat: false,
+                                width: 80,
+                                height: 80,
+                                fit: BoxFit.contain,
+                              );
+                            },
+                          ),
                           Text(
                             '$_streak',
                             style: TextStyle(
@@ -580,96 +769,33 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
             ),
             const SizedBox(height: 8),
 
-            // Quick Training Card
-            AcrylicCard(
-              margin: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.2),
-                      Colors.transparent,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: const EdgeInsets.all(20.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            AppLocalizations.of(context)!.readyForPractice,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            AppLocalizations.of(context)!.takeATrainingSession,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Theme.of(
-                                context,
-                              ).extension<AppColorsExtension>()!.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.access_time,
-                                size: 16,
-                                color: Theme.of(context)
-                                    .extension<AppColorsExtension>()!
-                                    .textSecondary,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                AppLocalizations.of(context)!.threeMinutes,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Theme.of(context)
-                                      .extension<AppColorsExtension>()!
-                                      .textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      onPressed: _startQuickTraining,
-                      child: Text(
-                        AppLocalizations.of(context)!.start,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            _buildTrainingCard(
+              title: l10n.readyForPractice,
+              subtitle:
+                  plan?.list.name ??
+                  (settingsState.hasError
+                      ? l10n.quickTrainingReload
+                      : settings == null
+                      ? l10n.takeATrainingSession
+                      : l10n.quickTrainingEmpty),
+              detail: practiceDetail,
+              buttonLabel: settingsState.hasError
+                  ? l10n.quickTrainingReload
+                  : null,
+              onPressed: settingsState.hasError
+                  ? () => ref.invalidate(settingsProvider)
+                  : plan == null || _openingTraining
+                  ? null
+                  : () => _startQuickTraining(plan),
             ),
+            for (final queued in _additionalReviews(plan, settings))
+              _buildTrainingCard(
+                title: queued.list.name,
+                detail: l10n.quickTrainingDue(queued.reviewWordIds!.length),
+                onPressed: _openingTraining
+                    ? null
+                    : () => _startQuickTraining(queued),
+              ),
             const SizedBox(height: 16),
 
             // Grid of Custom Lists Pie Charts
@@ -685,8 +811,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
               itemCount: _customLists.length,
               itemBuilder: (context, i) {
                 final list = _customLists[i];
-                list.words.loadSync();
-                final listWords = list.words.toList();
+                final listWords = _listWords[list.id] ?? const <Word>[];
                 final listLearned = listWords
                     .where((w) => w.progress >= 5)
                     .length;
@@ -712,7 +837,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 );
               },
             ),
-            const SizedBox(height: 32),
           ],
         ),
       ),

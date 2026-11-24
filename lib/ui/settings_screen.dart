@@ -13,6 +13,7 @@ import '../ui/widgets/settings_tile.dart';
 import '../data/services/profile_service.dart';
 import '../main.dart';
 import '../core/feature_flags.dart';
+import 'widgets/rush_settings_sheet.dart';
 
 final settingsProvider = FutureProvider.autoDispose<app.Settings>((ref) async {
   return ref.watch(databaseServiceProvider).getSettings();
@@ -32,7 +33,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   ) async {
     update();
     await ref.read(databaseServiceProvider).saveSettings(settings);
-    ref.invalidate(settingsProvider);
+    if (mounted) ref.invalidate(settingsProvider);
+  }
+
+  Future<void> _showDefaultRushSettings(app.Settings settings) async {
+    final configuration = await showRushSettingsSheet(
+      context,
+      initialErrorLimit: settings.rushErrorLimit,
+    );
+    if (!mounted ||
+        configuration == null ||
+        configuration.errorLimit == settings.rushErrorLimit) {
+      return;
+    }
+    await _updateSettings(settings, () {
+      settings.defaultRushErrorLimit = configuration.errorLimit;
+    });
   }
 
   Future<void> _pickTime(
@@ -211,6 +227,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final settingsAsync = ref.watch(settingsProvider);
     final accentColor = Theme.of(context).colorScheme.primary;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(title: Text(AppLocalizations.of(context)!.settingsTitle)),
@@ -304,9 +321,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   SettingsTile(
                     title: AppLocalizations.of(context)!.questionTypes,
-                    showDivider: false,
                     trailing: const Icon(Icons.chevron_right, color: Colors.grey),
                     onTap: () => _showQuestionTypesDialog(settings),
+                  ),
+                  SwitchListTile(
+                    title: Text(l10n.settingsLearningHints),
+                    value: !settings.learningHintsDisabled,
+                    onChanged: (enabled) => _updateSettings(settings, () {
+                      settings.learningHintsDisabled = !enabled;
+                    }),
+                  ),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  SwitchListTile(
+                    title: Text(l10n.settingsReviewHints),
+                    value: !settings.reviewHintsDisabled,
+                    onChanged: (enabled) => _updateSettings(settings, () {
+                      settings.reviewHintsDisabled = !enabled;
+                    }),
+                  ),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  SettingsTile(
+                    title: l10n.settingsRushErrorLimit,
+                    subtitle: l10n.rushErrorLimitSummary(settings.rushErrorLimit),
+                    showDivider: false,
+                    trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                    onTap: () => _showDefaultRushSettings(settings),
                   ),
                 ],
               ),

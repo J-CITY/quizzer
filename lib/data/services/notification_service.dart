@@ -3,6 +3,7 @@ import 'package:workmanager/workmanager.dart';
 import 'package:quizzer/utils/constants.dart';
 import 'dart:io';
 import 'database_service.dart';
+import 'word_image_files.dart';
 import '../models/custom_list.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -12,10 +13,14 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:quizzer/l10n/app_localizations.dart';
 
-Future<String> _downloadAndSaveFile(String url, String fileName) async {
+Future<String?> _notificationImagePath(String source, String fileName) async {
+  if (!WordImageFiles.isRemote(source)) {
+    return (await WordImageFiles.findLocal(source))?.path;
+  }
   final Directory directory = await getApplicationDocumentsDirectory();
   final String filePath = '${directory.path}/$fileName';
-  final http.Response response = await http.get(Uri.parse(url));
+  final http.Response response = await http.get(Uri.parse(source));
+  if (response.statusCode != HttpStatus.ok) return null;
   final File file = File(filePath);
   await file.writeAsBytes(response.bodyBytes);
   return filePath;
@@ -190,12 +195,14 @@ void callbackDispatcher() {
           StyleInformation? styleInformation = const BigTextStyleInformation('');
           if (word.imageUrl != null && word.imageUrl!.isNotEmpty) {
             try {
-              final String largeIconPath = await _downloadAndSaveFile(
+              final largeIconPath = await _notificationImagePath(
                   word.imageUrl!, 'largeIcon_${word.id}');
-              styleInformation = BigPictureStyleInformation(
-                FilePathAndroidBitmap(largeIconPath),
-                hideExpandedLargeIcon: true,
-              );
+              if (largeIconPath != null) {
+                styleInformation = BigPictureStyleInformation(
+                  FilePathAndroidBitmap(largeIconPath),
+                  hideExpandedLargeIcon: true,
+                );
+              }
             } catch (e) {
               // Ignore download errors
             }
@@ -308,8 +315,10 @@ class NotificationService {
         StyleInformation? styleInformation = const BigTextStyleInformation('');
         if (word.imageUrl != null && word.imageUrl!.isNotEmpty) {
           try {
-            final String largeIconPath = await _downloadAndSaveFile(word.imageUrl!, 'largeIcon_${word.id}');
-            styleInformation = BigPictureStyleInformation(FilePathAndroidBitmap(largeIconPath), hideExpandedLargeIcon: true);
+            final largeIconPath = await _notificationImagePath(word.imageUrl!, 'largeIcon_${word.id}');
+            if (largeIconPath != null) {
+              styleInformation = BigPictureStyleInformation(FilePathAndroidBitmap(largeIconPath), hideExpandedLargeIcon: true);
+            }
           } catch (e) {}
         }
         final listLanguage = list?.language ?? 'ja-JP';

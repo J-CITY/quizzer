@@ -1,5 +1,7 @@
 import 'package:isar/isar.dart';
 
+import 'rush_session.dart';
+
 part 'settings.g.dart';
 
 @collection
@@ -39,6 +41,15 @@ class Settings {
 
   bool autoAdvanceToNextQuestion = true;
 
+  bool learningHintsDisabled = false;
+  bool reviewHintsDisabled = false;
+  int? defaultRushErrorLimit;
+
+  @ignore
+  int get rushErrorLimit =>
+      RushSession.parseErrorLimit(defaultRushErrorLimit) ??
+      RushSession.defaultErrorLimit;
+
   bool useSimilarWordsForOptions = false;
   bool useSpoiledWordsForOptions = false;
 
@@ -63,4 +74,6 @@ class Settings {
   bool randomWordNotificationEnabled = false;
   int randomWordNotificationIntervalMinutes = 60;
   int? randomWordNotificationListId;
+
+  bool flashcardShuffleCards = false;
 }

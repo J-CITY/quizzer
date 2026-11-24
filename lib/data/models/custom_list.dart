@@ -30,6 +30,7 @@ class CustomList {
   int questionsCount = 20;
   int learningQueueSize = 20;
   int targetWordRepetitions = 3;
+  int? rushErrorLimitOverride;
 
   bool questionWordToTranslate = true;
   bool questionTranslateToWord = true;
@@ -43,4 +44,6 @@ class CustomList {
   bool questionTranslateToWordInput = true;
   bool questionTranslateToWordConstructor = true;
   bool questionImageToWord = true;
+
+  bool flashcardShuffleCards = false;
 }

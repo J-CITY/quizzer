@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/widgets.dart' show StringCharacters;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/word.dart';
 import '../data/models/settings.dart';
@@ -25,6 +26,10 @@ class QuestionType {
   static const int imageToJap = 10;
 }
 
+enum QuestionHintKind { mnemonic, firstCharacter, hideOption }
+
+typedef QuestionHint = ({QuestionHintKind kind, String value});
+
 class Question {
   final Word word;
   final String prompt; // e.g. Japanese word
@@ -41,13 +46,260 @@ class Question {
     required this.options,
     required this.type,
   });
+
+  bool get isVoice =>
+      type == QuestionType.voiceToTrans ||
+      type == QuestionType.voiceToJap ||
+      type == QuestionType.voiceToJapInput ||
+      type == QuestionType.voiceToJapConstructor;
+
+  bool get isTextInput =>
+      type == QuestionType.transToJapInput ||
+      type == QuestionType.voiceToJapInput;
+
+  bool get isConstructor =>
+      type == QuestionType.transToJapConstructor ||
+      type == QuestionType.voiceToJapConstructor;
+
+  bool get isMultiSelection =>
+      type == QuestionType.japToReading && correctAnswer.contains('/');
+
+  bool acceptsAnswer(String answer) {
+    if (isTextInput) {
+      return answer.trim() == word.japanese.trim() ||
+          (word.reading != null && answer.trim() == word.reading!.trim());
+    }
+    if (isMultiSelection) {
+      final selected = _readingOptions(answer);
+      final expected = _readingOptions(correctAnswer);
+      return selected.length == expected.length &&
+          selected.containsAll(expected);
+    }
+    return answer.trim() == correctAnswer.trim();
+  }
+
+  QuestionHint? get hint {
+    final mnemonic = word.mnemonic?.trim();
+    if (mnemonic != null && mnemonic.isNotEmpty) {
+      return (kind: QuestionHintKind.mnemonic, value: mnemonic);
+    }
+    if (isTextInput || isConstructor) {
+      final characters = correctAnswer.trim().characters;
+      if (characters.length > 1) {
+        return (kind: QuestionHintKind.firstCharacter, value: characters.first);
+      }
+      return null;
+    }
+    final correctOptions = isMultiSelection
+        ? _readingOptions(correctAnswer)
+        : {correctAnswer.trim()};
+    final distractors = options.where(
+      (option) => !correctOptions.contains(option.trim()),
+    );
+    if (distractors.length < 2) return null;
+    return (kind: QuestionHintKind.hideOption, value: distractors.first);
+  }
+
+  static Set<String> _readingOptions(String answer) => answer
+      .split('/')
+      .map((option) => option.trim())
+      .where((option) => option.isNotEmpty)
+      .toSet();
+}
+
+enum PracticeAnswer { independent, assisted, incorrect }
+
+enum PracticeSkill {
+  translation(2),
+  listening(3),
+  writing(3);
+
+  const PracticeSkill(this.weight);
+
+  final int weight;
+
+  static PracticeSkill forQuestionType(int questionType) =>
+      switch (questionType) {
+        QuestionType.voiceToTrans || QuestionType.voiceToJap => listening,
+        QuestionType.transToJapInput ||
+        QuestionType.transToJapConstructor ||
+        QuestionType.voiceToJapInput ||
+        QuestionType.voiceToJapConstructor => writing,
+        _ => translation,
+      };
+}
+
+typedef PracticeAttempt = ({int questionType, PracticeAnswer answer});
+
+class SkillPracticeResult {
+  final int independent;
+  final int assisted;
+  final int incorrect;
+  final List<int> practiceWordIds;
+
+  const SkillPracticeResult({
+    required this.independent,
+    required this.assisted,
+    required this.incorrect,
+    required this.practiceWordIds,
+  });
+
+  int get total => independent + assisted + incorrect;
+}
+
+Map<PracticeSkill, SkillPracticeResult> summarizePracticeSkills(
+  Map<int, List<PracticeAttempt>> attemptsByWord,
+) {
+  final answers = {
+    for (final skill in PracticeSkill.values) skill: <PracticeAnswer>[],
+  };
+  final practiceWords = {
+    for (final skill in PracticeSkill.values) skill: <int>{},
+  };
+  for (final entry in attemptsByWord.entries) {
+    for (final attempt in entry.value) {
+      final skill = PracticeSkill.forQuestionType(attempt.questionType);
+      answers[skill]!.add(attempt.answer);
+      if (attempt.answer != PracticeAnswer.independent) {
+        practiceWords[skill]!.add(entry.key);
+      }
+    }
+  }
+  return {
+    for (final skill in PracticeSkill.values)
+      skill: SkillPracticeResult(
+        independent: answers[skill]!
+            .where((answer) => answer == PracticeAnswer.independent)
+            .length,
+        assisted: answers[skill]!
+            .where((answer) => answer == PracticeAnswer.assisted)
+            .length,
+        incorrect: answers[skill]!
+            .where((answer) => answer == PracticeAnswer.incorrect)
+            .length,
+        practiceWordIds: List.unmodifiable(practiceWords[skill]!),
+      ),
+  };
+}
+
+/// Uses first attempts only. Assisted answers provide neither credit nor penalty.
+int learningProgressAfterSession(
+  int previousProgress,
+  List<PracticeAttempt> attempts,
+) {
+  if (attempts.isEmpty) return previousProgress;
+  var totalWeight = 0;
+  var independentWeight = 0;
+  var incorrectWeight = 0;
+  var independentCount = 0;
+  var incorrectCount = 0;
+  for (final attempt in attempts) {
+    final weight = PracticeSkill.forQuestionType(attempt.questionType).weight;
+    totalWeight += weight;
+    switch (attempt.answer) {
+      case PracticeAnswer.independent:
+        independentCount++;
+        independentWeight += weight;
+      case PracticeAnswer.incorrect:
+        incorrectCount++;
+        incorrectWeight += weight;
+      case PracticeAnswer.assisted:
+        break;
+    }
+  }
+  if (independentCount >= min(2, attempts.length) &&
+      independentWeight * 5 >= totalWeight * 3) {
+    return min(5, previousProgress + 1);
+  }
+  if (incorrectCount >= 2 && incorrectWeight * 5 >= totalWeight * 3) {
+    return max(0, previousProgress - 1);
+  }
+  return previousProgress;
 }
 
 class TrainingEngine {
+  static const _rushQuestionTypes = {
+    QuestionType.japToReading,
+    QuestionType.readingToJap,
+    QuestionType.japToTrans,
+    QuestionType.transToJap,
+    QuestionType.transToJapInput,
+    QuestionType.transToJapConstructor,
+  };
   final _random = Random();
 
-  /// Generates a list of [count] questions from [sourceWords].
-  /// Generates a list of questions from [sourceWords], repeating each word up to 3 times with different question types.
+  /// Shuffles the list once and generates each offline question on demand.
+  Iterable<Question> generateRushSession(
+    List<Word> words,
+    Settings settings,
+    AppLocalizations l10n, {
+    CustomList? customList,
+  }) sync* {
+    final shuffledWords = words.toList()..shuffle(_random);
+    for (final word in shuffledWords) {
+      final types = getAvailableQuestionTypes(
+        word,
+        settings,
+        customList,
+      ).where(_rushQuestionTypes.contains).toList()..shuffle(_random);
+      if (types.isEmpty) types.add(QuestionType.japToTrans);
+
+      Question? question;
+      for (final type in types) {
+        final candidate = _generateQuestion(
+          word,
+          words,
+          settings,
+          l10n,
+          customList,
+          type,
+          true,
+        );
+        if (candidate.isTextInput ||
+            candidate.isConstructor ||
+            (!candidate.isMultiSelection && candidate.options.length > 1) ||
+            (candidate.isMultiSelection &&
+                candidate.options.any(
+                  (option) => !Question._readingOptions(
+                    candidate.correctAnswer,
+                  ).contains(option),
+                ))) {
+          question = candidate;
+          break;
+        }
+      }
+      yield question ??
+          _generateQuestion(
+            word,
+            words,
+            settings,
+            l10n,
+            customList,
+            QuestionType.transToJapConstructor,
+            true,
+          );
+    }
+  }
+
+  static int sessionQuestionLimit(Settings settings, CustomList? list) {
+    if (list != null &&
+        list.useCustomTrainingSettings &&
+        list.questionsCount > 0) {
+      return list.questionsCount;
+    }
+    return max(1, settings.questionsCount);
+  }
+
+  static List<Word> dueReviewWords(Iterable<Word> words, DateTime now) {
+    final earliest = DateTime.fromMillisecondsSinceEpoch(0);
+    return words.where((word) => word.isReviewDue(now)).toList()..sort((a, b) {
+      final byDate = (a.effectiveNextReviewAt ?? earliest).compareTo(
+        b.effectiveNextReviewAt ?? earliest,
+      );
+      return byDate == 0 ? a.id.compareTo(b.id) : byDate;
+    });
+  }
+
   List<Question> generateSession(
     List<Word> sourceWords,
     List<Word> dictionaryWords,
@@ -55,84 +307,150 @@ class TrainingEngine {
     AppLocalizations l10n, {
     bool isReviewMode = false,
     CustomList? customList,
+    List<int>? reviewWordIds,
+    PracticeSkill? reviewSkill,
+    DateTime? now,
   }) {
     if (sourceWords.isEmpty) return [];
 
-    // Целевое количество вопросов
-    final customQuestionsCount = (customList != null && customList.useCustomTrainingSettings && customList.questionsCount > 0) ? customList.questionsCount : settings.questionsCount;
-    final targetQuestionsCount = isReviewMode ? sourceWords.length : customQuestionsCount;
-
-    final targetRepetitions = (customList != null && customList.useCustomTrainingSettings && customList.targetWordRepetitions > 0) ? customList.targetWordRepetitions : settings.targetWordRepetitions;
-
-    // Рассчитываем необходимое количество уникальных слов (каждое слово до N раз)
-    final targetUniqueCount = (targetQuestionsCount / targetRepetitions).ceil();
-    final actualUniqueCount = min(targetUniqueCount, sourceWords.length);
-
-    List<Word> selectedWords;
-
+    final questionLimit = sessionQuestionLimit(settings, customList);
     if (isReviewMode) {
-      // Режим повторения: выбираем случайные уникальные слова
-      selectedWords = List.from(sourceWords);
-      selectedWords.shuffle(_random);
-      selectedWords = selectedWords.take(actualUniqueCount).toList();
-    } else {
-      // Режим обучения: выбираем неизученные слова
-      List<Word> unlearned = sourceWords.where((w) => w.progress < 5).toList();
-
-      if (unlearned.isEmpty) {
-        unlearned = List.from(sourceWords);
+      final List<Word> selectedWords;
+      if (reviewWordIds != null) {
+        final byId = {for (final word in sourceWords) word.id: word};
+        selectedWords = [for (final id in reviewWordIds.toSet()) ?byId[id]];
+      } else {
+        final due = dueReviewWords(sourceWords, now ?? DateTime.now());
+        selectedWords = due.isNotEmpty
+            ? due
+            : (sourceWords.toList()..shuffle(_random));
       }
-
-      unlearned.shuffle(_random);
-      unlearned.sort((a, b) => a.progress.compareTo(b.progress));
-
-      selectedWords = unlearned.take(actualUniqueCount).toList();
-      selectedWords.shuffle(_random);
+      return [
+        for (final word in selectedWords.take(questionLimit))
+          _generateQuestion(
+            word,
+            dictionaryWords,
+            settings,
+            l10n,
+            customList,
+            reviewSkill == null
+                ? null
+                : _focusedQuestionType(word, settings, customList, reviewSkill),
+          ),
+      ];
     }
 
-    // Распределяем вопросы между выбранными словами
-    final List<Question> sessionQuestions = [];
-    final wordsWithFullReps = targetQuestionsCount ~/ targetRepetitions;
-    final remainder = targetQuestionsCount % targetRepetitions;
+    final int repetitions = max(
+      1,
+      customList != null &&
+              customList.useCustomTrainingSettings &&
+              customList.targetWordRepetitions > 0
+          ? customList.targetWordRepetitions
+          : settings.targetWordRepetitions,
+    );
+    final words = sourceWords.where((word) => !word.isLearned).toList()
+      ..shuffle(_random)
+      ..sort((a, b) => a.progress.compareTo(b.progress));
+    if (words.isEmpty) return [];
 
-    for (int i = 0; i < selectedWords.length; i++) {
-      final word = selectedWords[i];
-      
-      // Определяем количество вопросов для данного слова
-      int wordQuestionsCount = 0;
-      if (i < wordsWithFullReps) {
-        wordQuestionsCount = targetRepetitions;
-      } else if (i == wordsWithFullReps) {
-        wordQuestionsCount = remainder;
-      }
+    final targetWords = (questionLimit / repetitions).ceil();
+    // When multiple checks per word are requested, avoid giving the last word
+    // a single scored question just to fill the session quota.
+    final wordsWithEnoughQuestions = repetitions == 1
+        ? targetWords
+        : min(targetWords, max(1, questionLimit ~/ 2));
+    final selectedWords = words.take(wordsWithEnoughQuestions).toList();
+    final totalQuestions = min(
+      questionLimit,
+      selectedWords.length * repetitions,
+    );
+    final questionsPerWord = totalQuestions ~/ selectedWords.length;
+    final extraQuestions = totalQuestions % selectedWords.length;
 
-      if (wordQuestionsCount == 0) continue;
-
-      // Получаем доступные типы вопросов для этого слова
-      final availableTypes = getAvailableQuestionTypes(word, settings, customList);
-
-      // Выбираем уникальные типы вопросов
-      final List<int> chosenTypes = [];
-      List<int> pool = List.from(availableTypes)..shuffle(_random);
-      for (int j = 0; j < wordQuestionsCount; j++) {
-        if (pool.isEmpty) {
-          pool = List.from(availableTypes)..shuffle(_random);
-        }
-        chosenTypes.add(pool.removeLast());
-      }
-
-      // Генерируем вопросы выбранных типов
-      for (final type in chosenTypes) {
-        sessionQuestions.add(
-          _generateQuestion(word, dictionaryWords, settings, l10n, customList, type),
+    final questions = <Question>[];
+    for (final (index, word) in selectedWords.indexed) {
+      final questionCount = questionsPerWord + (index < extraQuestions ? 1 : 0);
+      final types = getAvailableQuestionTypes(word, settings, customList);
+      for (final type in _chooseStudyQuestionTypes(types, questionCount)) {
+        questions.add(
+          _generateQuestion(
+            word,
+            dictionaryWords,
+            settings,
+            l10n,
+            customList,
+            type,
+          ),
         );
       }
     }
+    return questions..shuffle(_random);
+  }
 
-    // Перемешиваем финальный список вопросов, чтобы они шли вразнобой
-    sessionQuestions.shuffle(_random);
+  Iterable<int> _chooseStudyQuestionTypes(List<int> types, int count) sync* {
+    // First sample each available skill, then cycle through unused types.
+    final shuffled = types.toList()..shuffle(_random);
+    final seenSkills = <PracticeSkill>{};
+    final distinctSkills = <int>[];
+    final otherTypes = <int>[];
+    for (final type in shuffled) {
+      if (seenSkills.add(PracticeSkill.forQuestionType(type))) {
+        distinctSkills.add(type);
+      } else {
+        otherTypes.add(type);
+      }
+    }
+    final ordered = [...distinctSkills, ...otherTypes];
+    for (var index = 0; index < count; index++) {
+      yield ordered[index % ordered.length];
+    }
+  }
 
-    return sessionQuestions;
+  int _focusedQuestionType(
+    Word word,
+    Settings settings,
+    CustomList? customList,
+    PracticeSkill skill,
+  ) {
+    final types =
+        getAvailableQuestionTypes(word, settings, customList)
+            .where(
+              (type) =>
+                  type != QuestionType.imageToJap &&
+                  PracticeSkill.forQuestionType(type) == skill,
+            )
+            .toList()
+          ..shuffle(_random);
+    return types.firstOrNull ??
+        switch (skill) {
+          PracticeSkill.translation => QuestionType.japToTrans,
+          PracticeSkill.listening => QuestionType.voiceToTrans,
+          PracticeSkill.writing => QuestionType.transToJapConstructor,
+        };
+  }
+
+  Question replaceUnavailableImageQuestion(
+    Question question,
+    List<Word> dictionaryWords,
+    Settings settings,
+    AppLocalizations l10n,
+    CustomList? customList,
+  ) {
+    final alternatives =
+        getAvailableQuestionTypes(
+            question.word,
+            settings,
+            customList,
+          ).where((type) => type != QuestionType.imageToJap).toList()
+          ..shuffle(_random);
+    return _generateQuestion(
+      question.word,
+      dictionaryWords,
+      settings,
+      l10n,
+      customList,
+      alternatives.firstOrNull ?? QuestionType.japToTrans,
+    );
   }
 
   Question regenerateQuestionOptions(
@@ -170,7 +488,10 @@ class TrainingEngine {
     bool useTranslateToWord = settings.questionTranslateToWord;
     bool useWordToReading = settings.questionWordToReading;
     bool useReadingToWord = settings.questionReadingToWord;
-    bool useImageToWord = settings.questionImageToWord && word.imageUrl != null && word.imageUrl!.isNotEmpty;
+    bool useImageToWord =
+        settings.questionImageToWord &&
+        word.imageUrl != null &&
+        word.imageUrl!.isNotEmpty;
 
     if (customList != null && customList.useCustomQuestionSettings) {
       useVoiceToTranslate = customList.questionVoiceToTranslate;
@@ -184,7 +505,10 @@ class TrainingEngine {
       useTranslateToWord = customList.questionTranslateToWord;
       useWordToReading = customList.questionWordToReading;
       useReadingToWord = customList.questionReadingToWord;
-      useImageToWord = customList.questionImageToWord && word.imageUrl != null && word.imageUrl!.isNotEmpty;
+      useImageToWord =
+          customList.questionImageToWord &&
+          word.imageUrl != null &&
+          word.imageUrl!.isNotEmpty;
     }
 
     if (useWordToTranslate) {
@@ -234,15 +558,34 @@ class TrainingEngine {
     AppLocalizations l10n,
     CustomList? customList, [
     int? forceType,
+    bool isRush = false,
   ]) {
-    final availableTypes = getAvailableQuestionTypes(word, settings, customList);
-    final type = forceType ?? availableTypes[_random.nextInt(availableTypes.length)];
+    final availableTypes = getAvailableQuestionTypes(
+      word,
+      settings,
+      customList,
+    );
+    final type =
+        forceType ?? availableTypes[_random.nextInt(availableTypes.length)];
 
     String prompt = '';
     String? subtitle;
     String correctAnswer = '';
     List<String> wrongOptions = [];
     List<String>? customOptions;
+
+    List<String> getWrongOptions(
+      String? Function(Word) extractor,
+      bool isTargetLanguage,
+    ) => _getWrongOptions(
+      allWords,
+      word,
+      extractor,
+      isTargetLanguage,
+      settings,
+      l10n,
+      isRush: isRush,
+    );
 
     // Helper to format Japanese + Reading for translation questions
     String getJapaneseDisplay(Word w) {
@@ -257,130 +600,67 @@ class TrainingEngine {
         prompt = word.japanese;
         correctAnswer = word.reading!;
         if (word.reading!.contains('/')) {
-          final correctReadings = word.reading!.split('/').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-          
-          wrongOptions = _getWrongOptions(
-            allWords,
-            word,
-            (w) => w.reading,
-            true,
-            settings,
-            l10n,
-          );
+          final correctReadings = word.reading!
+              .split('/')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
+
+          wrongOptions = getWrongOptions((w) => w.reading, true);
 
           Set<String> allWrongChips = {};
           for (var w in wrongOptions) {
-            allWrongChips.addAll(w.split('/').map((e) => e.trim()).where((e) => e.isNotEmpty));
+            allWrongChips.addAll(
+              w.split('/').map((e) => e.trim()).where((e) => e.isNotEmpty),
+            );
           }
           allWrongChips.removeAll(correctReadings);
 
           const int maxMultipleChoiceOptions = 8;
-          int targetWrongCount = maxMultipleChoiceOptions - correctReadings.length;
+          int targetWrongCount =
+              maxMultipleChoiceOptions - correctReadings.length;
           if (targetWrongCount < correctReadings.length) {
-              targetWrongCount = correctReadings.length;
+            targetWrongCount = correctReadings.length;
           }
           final wrongList = allWrongChips.toList()..shuffle(_random);
           final selectedWrong = wrongList.take(targetWrongCount).toList();
 
-          customOptions = [...correctReadings, ...selectedWrong]..shuffle(_random);
+          customOptions = [...correctReadings, ...selectedWrong]
+            ..shuffle(_random);
           wrongOptions = [];
         } else {
-          wrongOptions = _getWrongOptions(
-            allWords,
-            word,
-            (w) => w.reading,
-            true,
-            settings,
-            l10n,
-          );
+          wrongOptions = getWrongOptions((w) => w.reading, true);
         }
         break;
       case QuestionType.readingToJap:
         prompt = word.reading!;
         correctAnswer = word.japanese;
-        wrongOptions = _getWrongOptions(
-          allWords,
-          word,
-          (w) => w.japanese,
-          true,
-          settings,
-          l10n,
-        );
+        wrongOptions = getWrongOptions((w) => w.japanese, true);
         break;
       case QuestionType.japToTrans:
         prompt = word.japanese;
         subtitle = word.reading;
         correctAnswer = word.translation;
-        wrongOptions = _getWrongOptions(
-          allWords,
-          word,
-          (w) => w.translation,
-          false,
-          settings,
-          l10n,
-        );
+        wrongOptions = getWrongOptions((w) => w.translation, false);
         break;
       case QuestionType.transToJap:
         prompt = word.translation;
         correctAnswer = getJapaneseDisplay(word);
-        wrongOptions = _getWrongOptions(
-          allWords,
-          word,
-          getJapaneseDisplay,
-          true,
-          settings,
-          l10n,
-        );
+        wrongOptions = getWrongOptions(getJapaneseDisplay, true);
         break;
       case QuestionType.voiceToTrans:
         prompt = ''; // handled in UI
         correctAnswer = word.translation;
-        wrongOptions = _getWrongOptions(
-          allWords,
-          word,
-          (w) => w.translation,
-          false,
-          settings,
-          l10n,
-        );
+        wrongOptions = getWrongOptions((w) => w.translation, false);
         break;
       case QuestionType.voiceToJap:
         prompt = ''; // handled in UI
         correctAnswer = getJapaneseDisplay(word);
-        wrongOptions = _getWrongOptions(
-          allWords,
-          word,
-          getJapaneseDisplay,
-          true,
-          settings,
-          l10n,
-        );
+        wrongOptions = getWrongOptions(getJapaneseDisplay, true);
         break;
       case QuestionType.transToJapInput:
         prompt = word.translation;
         correctAnswer = word.japanese;
-        wrongOptions = [];
-        break;
-      case QuestionType.transToJapConstructor:
-        prompt = word.translation;
-        correctAnswer = word.japanese.replaceAll(' ', '');
-
-        final correctChars = word.japanese.replaceAll(' ', '').split('');
-        final extraCharsCount = _random.nextInt(correctChars.length + 2) + 1;
-        final extraChars = <String>[];
-        final allChars = allWords.map((w) => w.japanese.replaceAll(' ', '')).join('').split('');
-        allChars.shuffle(_random);
-
-        for (final c in allChars) {
-          if (!correctChars.contains(c) &&
-              !extraChars.contains(c) &&
-              c.trim().isNotEmpty) {
-            extraChars.add(c);
-            if (extraChars.length >= extraCharsCount) break;
-          }
-        }
-
-        customOptions = [...correctChars, ...extraChars]..shuffle(_random);
         wrongOptions = [];
         break;
       case QuestionType.voiceToJapInput:
@@ -388,39 +668,32 @@ class TrainingEngine {
         correctAnswer = word.japanese;
         wrongOptions = [];
         break;
+      case QuestionType.transToJapConstructor:
       case QuestionType.voiceToJapConstructor:
-        prompt = ''; // Handled in UI
+        if (type == QuestionType.transToJapConstructor) {
+          prompt = word.translation;
+        }
         correctAnswer = word.japanese.replaceAll(' ', '');
 
-        final correctChars2 = word.japanese.replaceAll(' ', '').split('');
-        final extraCharsCount2 = _random.nextInt(correctChars2.length + 2) + 1;
-        final extraChars2 = <String>[];
-        final allChars2 = allWords.map((w) => w.japanese.replaceAll(' ', '')).join('').split('');
-        allChars2.shuffle(_random);
-
-        for (final c in allChars2) {
-          if (!correctChars2.contains(c) &&
-              !extraChars2.contains(c) &&
-              c.trim().isNotEmpty) {
-            extraChars2.add(c);
-            if (extraChars2.length >= extraCharsCount2) break;
-          }
-        }
-
-        customOptions = [...correctChars2, ...extraChars2]..shuffle(_random);
-        wrongOptions = [];
+        final correctChars = correctAnswer.characters.toList();
+        final usedChars = correctChars.toSet();
+        final extraCharsCount = _random.nextInt(correctChars.length + 2) + 1;
+        final distractors =
+            allWords
+                .expand((w) => w.japanese.characters)
+                .where(
+                  (char) => char.trim().isNotEmpty && !usedChars.contains(char),
+                )
+                .toSet()
+                .toList()
+              ..shuffle(_random);
+        customOptions = [...correctChars, ...distractors.take(extraCharsCount)]
+          ..shuffle(_random);
         break;
       case QuestionType.imageToJap:
         prompt = ''; // Handled in UI
         correctAnswer = getJapaneseDisplay(word);
-        wrongOptions = _getWrongOptions(
-          allWords,
-          word,
-          getJapaneseDisplay,
-          true,
-          settings,
-          l10n,
-        );
+        wrongOptions = getWrongOptions(getJapaneseDisplay, true);
         break;
     }
 
@@ -458,22 +731,22 @@ class TrainingEngine {
     String? Function(Word) extractor,
     bool isTargetLanguage,
     Settings settings,
-    AppLocalizations l10n,
-  ) {
+    AppLocalizations l10n, {
+    required bool isRush,
+  }) {
     final correctValue = extractor(targetWord);
     if (correctValue == null) {
       return [l10n.error1, l10n.error2, l10n.error3];
     }
     final possibleWords = allWords.where((w) {
       final val = extractor(w);
-      return val != null && val.isNotEmpty && val != correctValue;
+      return val != null &&
+          val.trim().isNotEmpty &&
+          val.trim() != correctValue.trim();
     }).toList();
 
     Set<String> wrongValues = {};
     int attempts = 0;
-
-    // Pre-build or get cached confusable map
-    final confusableMap = _getConfusableMap(settings.customConfusableGroups);
 
     // Pre-sort by levenshtein if similar words are enabled
     List<String> possibleValues = possibleWords
@@ -491,6 +764,9 @@ class TrainingEngine {
       possibleValues.shuffle(_random);
     }
 
+    if (isRush) return possibleValues.take(3).toList();
+
+    final confusableMap = _getConfusableMap(settings.customConfusableGroups);
     while (wrongValues.length < 3 && attempts < 50) {
       attempts++;
       final option = _generateSingleWrongOption(

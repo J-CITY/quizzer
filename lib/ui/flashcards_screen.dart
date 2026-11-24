@@ -3,12 +3,12 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:auto_size_text/auto_size_text.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:quizzer/l10n/app_localizations.dart';
 import '../data/models/word.dart';
 import '../data/services/database_service.dart';
 import '../utils/constants.dart';
 import 'widgets/glow_button.dart';
+import 'widgets/word_image.dart';
 import 'training_screen.dart' show ttsProvider; // Reuse TTS provider
 
 class FlashcardsScreen extends ConsumerStatefulWidget {
@@ -26,6 +26,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
   int _currentIndex = 0;
   bool _isLoading = true;
   bool _isFlipped = false;
+  bool _shuffle = false;
 
   late AnimationController _flipController;
   late Animation<double> _flipAnimation;
@@ -72,11 +73,15 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
       await list.words.load();
       _words = list.words.toList();
       listLanguage = list.language;
+      _shuffle = list.flashcardShuffleCards;
     } else {
       _words = await db.getAllWords();
+      _shuffle = settings.flashcardShuffleCards;
     }
 
-    _words.shuffle();
+    if (_shuffle) {
+      _words.shuffle();
+    }
 
     await ref.read(ttsProvider).setLanguage(listLanguage);
 
@@ -98,6 +103,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
     if (!Platform.isWindows) {
       await ref.read(ttsProvider).stop();
     }
+    await Future.delayed(const Duration(milliseconds: 150));
     await ref.read(ttsProvider).speak(textToSpeak);
   }
 
@@ -294,16 +300,7 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
               flex: 4,
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                child: CachedNetworkImage(
-                  imageUrl: word.imageUrl!,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => const Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                  errorWidget: (context, url, error) => const Center(
-                    child: Icon(Icons.broken_image, size: 48, color: Colors.grey),
-                  ),
-                ),
+                child: WordImage(source: word.imageUrl!),
               ),
             ),
           Expanded(
@@ -357,12 +354,13 @@ class _FlashcardsScreenState extends ConsumerState<FlashcardsScreen>
                 ),
                 if (showWord || showReading)
                   Positioned(
-                    top: 8,
-                    right: 8,
+                    bottom: 16,
+                    right: 16,
                     child: IconButton(
+                      iconSize: 48,
                       icon: Icon(
                         Icons.volume_up,
-                        size: 32,
+                        size: 48,
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       onPressed: () {
